@@ -1,0 +1,62 @@
+;
+; AntiCheat.inf
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System ; TODO: specify appropriate Class
+ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318} ; TODO: specify appropriate ClassGuid
+Provider    = %ManufacturerName%
+CatalogFile = AntiCheat.cat
+DriverVer   = ; TODO: set DriverVer in stampinf property pages
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+AntiCheat.sys = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName% = Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%AntiCheat.DeviceDesc% = AntiCheat_Device, Root\AntiCheat ; TODO: edit hw-id
+
+[AntiCheat_Device.NT]
+CopyFiles = File_Copy
+
+[File_Copy]
+AntiCheat.sys
+
+;-------------- Service installation
+[AntiCheat_Device.NT.Services]
+AddService = AntiCheat,%SPSVCINST_ASSOCSERVICE%, AntiCheat_Service_Inst
+
+; -------------- AntiCheat driver install sections
+[AntiCheat_Service_Inst]
+DisplayName    = %AntiCheat.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\AntiCheat.sys
+
+[AntiCheat_Device.NT.Wdf]
+KmdfService = AntiCheat, AntiCheat_wdfsect
+
+[AntiCheat_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE = 0x00000002
+ManufacturerName = "<Your manufacturer name>" ;TODO: Replace with your manufacturer name
+DiskName = "AntiCheat Installation Disk"
+AntiCheat.DeviceDesc = "AntiCheat Device"
+AntiCheat.SVCDESC = "AntiCheat Service"
