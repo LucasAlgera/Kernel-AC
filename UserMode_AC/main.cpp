@@ -45,7 +45,6 @@ int main()
 
     std::string path;
 
-retry:
     std::cout << "Enter path of game to launch: ";
     std::cin >> path;
 

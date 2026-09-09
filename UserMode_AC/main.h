@@ -13,7 +13,13 @@ bool CreateNewProcess(std::string path)
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
-    return CreateProcessA(NULL, LPSTR(path.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+    bool status = CreateProcessA(NULL, LPSTR(path.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+
+    if (status) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+    return status;
 }
 
 bool InitializeDriver()
