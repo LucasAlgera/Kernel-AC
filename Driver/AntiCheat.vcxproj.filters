@@ -44,5 +44,8 @@
     <ClInclude Include="include\io.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\common.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

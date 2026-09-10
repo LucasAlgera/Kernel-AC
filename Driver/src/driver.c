@@ -2,11 +2,14 @@
 #include "io.h"
 #include "callbacks.h"
 #include <stdlib.h>
-
+#include "common.h"
 
 
 UNICODE_STRING g_DeviceName = RTL_CONSTANT_STRING(L"\\Device\\KernelAC");
 UNICODE_STRING g_DeviceSymbolicLink = RTL_CONSTANT_STRING(L"\\??\\KernelAC");
+
+PDRIVER_SETTINGS g_DriverExtention = NULL;
+
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject,
     IN PUNICODE_STRING RegistryPath)
@@ -26,12 +29,14 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject,
 
     status = IoCreateDevice(
         pDriverObject, 
-        256,                // <- should be size of device extension. fix later
+        sizeof(DRIVER_SETTINGS),
         &g_DeviceName, 
         FILE_DEVICE_UNKNOWN, 
         FILE_DEVICE_SECURE_OPEN, 
         FALSE, 
         &pDriverObject->DeviceObject);
+
+    g_DriverExtention = pDriverObject->DeviceObject->DeviceExtension;
 
     if (!NT_SUCCESS(status)) {
         DbgPrint("IoCreateDevice failed, status %x", status);
@@ -61,13 +66,18 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject,
     }
     DbgPrint("RegisterCallbacks succeeded");
 
-    DbgPrint("Hello World!");
+
+
+    DbgPrint("-----------------------");
+    DbgPrint("Driver Entry Succeeded.");
     return STATUS_SUCCESS;
 }
 
 NTSTATUS DriverUnload(IN PDRIVER_OBJECT pDriverObject)
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+    UnRegisterCallbacks();
 
     status = IoDeleteSymbolicLink(&g_DeviceSymbolicLink);
     if (!NT_SUCCESS(status)) {
@@ -79,5 +89,7 @@ NTSTATUS DriverUnload(IN PDRIVER_OBJECT pDriverObject)
         IoDeleteDevice(pDriverObject->DeviceObject);
         DbgPrint("Deleted Device");
     }
+    DbgPrint("Stopped Driver");
+
     return STATUS_SUCCESS;
 }

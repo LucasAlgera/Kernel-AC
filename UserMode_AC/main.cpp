@@ -4,6 +4,7 @@
 #include "main.h"
 
 #define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20002, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 
 int main()
@@ -31,17 +32,24 @@ int main()
     }
     else {
         DeviceIoControl(hDriver, IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE, NULL, NULL, NULL, NULL, NULL, NULL);
-
-        CloseHandle(hDriver);
     }
 
-
-    if (!CreateNewProcess("C:/Windows/system32/notepad.exe"))
+    HANDLE pHandle;
+    pHandle = CreateNewProcess("C:/Windows/system32/notepad.exe");
+    if (!pHandle)
     {
         std::cout << "WARNING: Could not start process! \n";
-        // goto retry;
+        return 0;
     }
 
+    DWORD PID = GetProcessId(pHandle);
+
+    if (hDriver == INVALID_HANDLE_VALUE) {
+        std::cerr << "Failed to get driver handle. Error: " << GetLastError() << std::endl;
+    }
+    else {
+        DeviceIoControl(hDriver, IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH, &PID, sizeof(DWORD), NULL, NULL, NULL, NULL);
+    }
 
     std::string path;
 
@@ -51,7 +59,7 @@ int main()
     std::cout << "\n\n" << "---------------\n";
     std::cout << "Starting: " << path << "\n";
 
-
+    if(hDriver) CloseHandle(hDriver);
     UnloadDriver();
 
     return 1;

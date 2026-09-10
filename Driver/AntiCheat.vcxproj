@@ -122,6 +122,7 @@
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\common.h" />
     <ClCompile Include="src\callbacks.c" />
     <ClCompile Include="src\driver.c" />
     <ClCompile Include="src\io.c" />

@@ -4,7 +4,7 @@
 
 HANDLE g_service = nullptr;
 
-bool CreateNewProcess(std::string path)
+HANDLE CreateNewProcess(std::string path)
 {
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
@@ -15,11 +15,11 @@ bool CreateNewProcess(std::string path)
 
     bool status = CreateProcessA(NULL, LPSTR(path.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
 
-    if (status) {
+    /*if (status) {
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
-    }
-    return status;
+    }*/
+    return pi.hProcess;
 }
 
 bool InitializeDriver()
