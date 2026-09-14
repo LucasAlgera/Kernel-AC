@@ -11,13 +11,18 @@ typedef unsigned long DWORD;
 typedef unsigned char BYTE;
 typedef BYTE* PBYTE;
 
+typedef struct _HASH_STORAGE
+{
+	unsigned char hash[32]; // SHA-256
+	uintptr_t offset;		// the offset to the .text section
+} HASH_STORAGE, * PHASH_STORAGE;
+
 #ifndef _DRIVER_SETTINGS_DEFINED
 #define _DRIVER_SETTINGS_DEFINED
 typedef struct _DRIVER_SETTINGS
 {
-	DWORD PID;						// PiD of the game
-	unsigned char hashes[10][32];	// hashes of sections of code
-
+	DWORD PID;					// PiD of the game
+	HASH_STORAGE hashes[10];
 } DRIVER_SETTINGS, * PDRIVER_SETTINGS;
 #endif
 

@@ -164,6 +164,7 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	PUCHAR code = NULL;
 	PEPROCESS process;
 	KAPC_STATE ApcState;
+    uintptr_t offset = 0x0;
 
 	UNREFERENCED_PARAMETER(DeviceObject);
 	UNREFERENCED_PARAMETER(Irp);
@@ -173,10 +174,10 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	KeStackAttachProcess((PRKPROCESS)process, &ApcState);
 
 
-	code = (PUCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, CODE_LENGTH, 'edoc');
+	code = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, CODE_LENGTH, 'edoc');
 
 
-	if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, 0x20)))
+	if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, offset)))
 	{
 		DbgPrint("Fail..");
 		return STATUS_UNSUCCESSFUL;
@@ -191,6 +192,10 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 			ComputeSHA256(code, CODE_LENGTH, hash);
             PrintSHA256(hash);
             DbgPrint("First byte: %02x", code[0]);
+
+            RtlCopyMemory(&g_DriverExtention->hashes->hash, &hash, sizeof(hash));
+            if(offset)
+                RtlCopyMemory(&g_DriverExtention->hashes->offset, &offset, sizeof(offset));
 		}
 
 	}
