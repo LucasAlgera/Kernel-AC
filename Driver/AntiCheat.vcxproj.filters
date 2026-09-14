@@ -33,6 +33,9 @@
     <ClCompile Include="src\io.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\hashing.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\callbacks.h">
@@ -46,6 +49,9 @@
     </ClInclude>
     <ClInclude Include="include\common.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\hashing.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -100,6 +100,7 @@
     </DriverSign>
     <Link>
       <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>$(DDK_LIB_PATH)cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ClCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -125,11 +126,13 @@
     <ClInclude Include="include\common.h" />
     <ClCompile Include="src\callbacks.c" />
     <ClCompile Include="src\driver.c" />
+    <ClCompile Include="src\hashing.c" />
     <ClCompile Include="src\io.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\callbacks.h" />
     <ClInclude Include="include\driver.h" />
+    <ClInclude Include="include\hashing.h" />
     <ClInclude Include="include\io.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
