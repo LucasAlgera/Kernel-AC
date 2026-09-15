@@ -62,6 +62,17 @@ int main()
     std::cout << "\n\n" << "---------------\n";
     std::cout << "Starting: " << path << "\n";
 
+    bool tamperDetected = false;
+
+    if(hDriver)DeviceIoControl(hDriver, IOCTL_VERIFY_SNAPSHOT_HASH, NULL, NULL, &tamperDetected, sizeof(bool), NULL, NULL);
+
+    if (tamperDetected)
+    {
+        std::cout << "tamper!!";
+    }
+
+    std::cin >> path;
+
     if(hDriver) CloseHandle(hDriver);
     UnloadDriver();
 

@@ -106,6 +106,13 @@ static void PrintSHA256(_In_reads_bytes_(32) unsigned char* hash)
     DbgPrint("Hash: %s\n", hexString);
 }
 
+
+// TODO ----------------------------------------------------------------------------------------------------------
+// I should just preform the hashing operation inside of the process's virtual address without copying over the 
+// entire section. (https://s4dbrd.github.io/posts/how-kernel-anti-cheats-work/#periodic-memory-integrity-hashing)
+// ---------------------------------------------------------------------------------------------------------------
+
+
 NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
 {
 	PEPROCESS process;
@@ -147,10 +154,11 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
         addr += SECTION_HEADER_LENGTH;
     }
 
-    if ((PVOID)codeBase != NULL)
-    {
-	    memcpy(*code, (PVOID)codeBase, CODE_LENGTH); // bit unsafe might resort to MmCopyVirtualMemory
-    }
+    *code = (PVOID)codeBase;
+    //if ((PVOID)codeBase != NULL)
+    //{
+	   // memcpy(*code, (PVOID)codeBase, CODE_LENGTH); // bit unsafe might resort to MmCopyVirtualMemory
+    //}
 
     ObDereferenceObject(process);
 
@@ -174,7 +182,7 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	KeStackAttachProcess((PRKPROCESS)process, &ApcState);
 
 
-	code = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, CODE_LENGTH, 'edoc');
+	//code = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, CODE_LENGTH, 'edoc');
 
 
 	if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, offset)))
@@ -205,7 +213,80 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	}
 
 	KeUnstackDetachProcess(&ApcState); // go back to own address space
-	if (code) ExFreePoolWithTag(code, 'edoc');
+	//if (code) ExFreePoolWithTag(code, 'edoc');
 
 	return STATUS_SUCCESS;
+}
+
+NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+{
+    PUCHAR code = NULL;
+    PEPROCESS process;
+    KAPC_STATE ApcState;
+    uintptr_t offset = 0x0;
+    BOOLEAN tampered = FALSE;
+
+    UNREFERENCED_PARAMETER(DeviceObject);
+    UNREFERENCED_PARAMETER(Irp);
+
+    // Use KeStackAttachProcess to attach to the user-mode space
+    PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process);
+    KeStackAttachProcess((PRKPROCESS)process, &ApcState);
+
+
+    if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, offset)))
+    {
+        DbgPrint("Failed to get .text section..\n");
+        goto fail;
+    }
+
+    __try
+    {
+        if (code != NULL)
+        {
+            unsigned char hash[32];
+
+            ComputeSHA256(code, CODE_LENGTH, hash);
+            if (memcmp(&g_DriverExtention->hashes->hash, &hash, sizeof(hash)) == 0)
+            {
+                tampered = TRUE;
+                DbgPrint("No tamper took place\n");
+            }
+            else
+            {
+                DbgPrint("WARNING: Tampering!\n");
+            }
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        DbgPrint("Exception hit!\n");
+        tampered = TRUE;
+        goto fail;
+    }
+
+
+    // Finish I/O request
+    PIO_STACK_LOCATION ioStack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG buffOutLength = ioStack->Parameters.DeviceIoControl.OutputBufferLength;
+    PVOID buffOut = Irp->AssociatedIrp.SystemBuffer; 
+
+    if (buffOutLength < sizeof(tampered)) goto fail;
+
+    RtlCopyMemory(&buffOut, &tampered, sizeof(tampered));
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = sizeof(tampered);
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    KeUnstackDetachProcess(&ApcState); // go back to own address space
+    return STATUS_SUCCESS;
+
+
+fail: // something went wrong
+    KeUnstackDetachProcess(&ApcState); // go back to own address space
+    Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return STATUS_UNSUCCESSFUL;
 }

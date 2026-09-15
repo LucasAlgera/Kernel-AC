@@ -44,3 +44,7 @@ extern CHAR g_Whitelist[WHITELIST_SIZE][MAX_PROCESS_NAME_LENGTH];
 #define PROCESS_VM_OPERATION              0x0008
 #define PROCESS_VM_READ                   0x0010
 #define PROCESS_VM_WRITE                  0x0020
+
+
+#define TRUE 1
+#define FALSE 0

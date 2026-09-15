@@ -46,16 +46,16 @@ NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		TakeHashSnapshot(DeviceObject, Irp);
 		break;
 	case IOCTL_VERIFY_SNAPSHOT_HASH:
-		// VerifyHashSnapshot();
+		VerifyHashSnapshot(DeviceObject, Irp);
+		goto end;
 		break;
 	}
 
 	Irp->IoStatus.Status = STATUS_SUCCESS;
 	Irp->IoStatus.Information = 0;
 	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	
 
-
+end:
 	return STATUS_SUCCESS;
 }
 

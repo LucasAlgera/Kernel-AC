@@ -11,3 +11,5 @@ NTSTATUS ComputeSHA256(
 NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* text, uintptr_t offset);
 
 NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp);
+
+NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp);
