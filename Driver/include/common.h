@@ -3,8 +3,7 @@
 
 // Import undocumented exported functions from ntoskrnl.exe:
 EXTERN_C NTSYSAPI UCHAR* PsGetProcessImageFileName(		__in PEPROCESS Process);
-EXTERN_C NTSYSAPI NTSTATUS PsLookupProcessByProcessId(	__in HANDLE ProcessId,
-														__out PEPROCESS* Process);
+EXTERN_C NTSYSAPI NTSTATUS PsLookupProcessByProcessId(	__in HANDLE ProcessId, __out PEPROCESS* Process);
 EXTERN_C NTSYSAPI PVOID PsGetProcessSectionBaseAddress(	__in PEPROCESS Process);
 
 typedef unsigned long DWORD;

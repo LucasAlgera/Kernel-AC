@@ -7,9 +7,10 @@
 #define IOCTL_SNAPSHOT_HASH_TEXT_SECTION		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20003, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_VERIFY_SNAPSHOT_HASH				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_WALK_PROCESS_LIST 				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define PROCESS_LINK_OFFSET 0x448 // for version 22H2
-#define MAX_PROCESSES		5000 // should be fine...
+#define MAX_PROCESSES		5000  // should be fine...
 
 
 NTSTATUS HandleProcessLaunch(IRP* Irp)
@@ -90,16 +91,60 @@ NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	return STATUS_SUCCESS;
 }
 
+NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+{
+	PIO_STACK_LOCATION irpSp;
+	ULONG IOCTL_CODE = 0;
+	PEPROCESS process;
+
+	UNREFERENCED_PARAMETER(DeviceObject);
+
+	irpSp = IoGetCurrentIrpStackLocation(Irp);
+	IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
+
+	if(!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process)))
+		return STATUS_UNSUCCESSFUL;
+
+	PVOID baseAddress = NULL;
+	MEMORY_BASIC_INFORMATION mbi;
+
+	KAPC_STATE apcState;
+	KeStackAttachProcess(process, &apcState);
+
+	while (NT_SUCCESS(ZwQueryVirtualMemory(
+		process,
+		baseAddress,
+		MemoryBasicInformation,
+		&mbi,
+		sizeof(mbi),
+		NULL))) 
+	{
+		if (mbi.State == MEM_COMMIT &&
+			(mbi.Protect & PAGE_EXECUTE_READ ||
+				mbi.Protect & PAGE_EXECUTE_READWRITE ||
+				mbi.Protect & PAGE_EXECUTE_WRITECOPY) &&
+			mbi.Type == MEM_PRIVATE)
+		{
+			DbgPrint("Found manually mapped code!");
+			return STATUS_UNSUCCESSFUL;
+		}
+		baseAddress = (PVOID)((ULONG_PTR)mbi.BaseAddress + mbi.RegionSize);
+		if ((ULONG_PTR)baseAddress >= 0x7FFFFFFFFFFF) break; // user-space limit
+	}
+	KeUnstackDetachProcess(&apcState);
+
+	return STATUS_SUCCESS;
+}
 
 NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 {
-	PIO_STACK_LOCATION stackSpace;
+	PIO_STACK_LOCATION irpSp;
 	ULONG IOCTL_CODE = 0;
 
 	UNREFERENCED_PARAMETER(DeviceObject);
 
-	stackSpace = IoGetCurrentIrpStackLocation(Irp);
-	IOCTL_CODE = stackSpace->Parameters.DeviceIoControl.IoControlCode;
+	irpSp = IoGetCurrentIrpStackLocation(Irp);
+	IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
 	switch (IOCTL_CODE)
 	{
 	case IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE:
@@ -119,6 +164,9 @@ NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	case IOCTL_WALK_PROCESS_LIST:
 		WalkProcessList(DeviceObject, Irp);
 		//goto end; TODO: implement IRP handling for process scanning.
+		break;
+	case IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE:
+		ScanManuallyMappedCode(DeviceObject, Irp);
 		break;
 	}
 
