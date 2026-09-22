@@ -91,7 +91,8 @@ ObPreOpCallbackRoutine(
 	if (!PID) goto end;  // game not launched (yet)
 
 	PEPROCESS gameProcess;
-	PsLookupProcessByProcessId((HANDLE)PID, &gameProcess);
+	if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)PID, &gameProcess)))
+		goto end;
 
 	if (targetProcess != gameProcess) goto end; // Not our game being targeted
 

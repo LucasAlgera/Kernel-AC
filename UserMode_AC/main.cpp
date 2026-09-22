@@ -3,21 +3,23 @@
 #include <Windows.h>
 #include "main.h"
 
+#include <chrono>
+#include <thread>
+
 #define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20002, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_SNAPSHOT_HASH_TEXT_SECTION		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20003, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_VERIFY_SNAPSHOT_HASH				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_WALK_PROCESS_LIST 				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 
 int main()
 {
     if (!InitializeDriver())
     {
-        //UnloadDriver();
         std::cout << "Could not start Anti Cheat";
         return 0;
     }
-
 
     HANDLE hDriver = CreateFileW(
         L"\\\\.\\KernelAC",          
@@ -54,16 +56,10 @@ int main()
         DeviceIoControl(hDriver, IOCTL_SNAPSHOT_HASH_TEXT_SECTION, NULL, NULL, NULL, NULL, NULL, NULL);
     }
 
-    std::string path;
-
-    std::cout << "Enter path of game to launch: ";
-    std::cin >> path;
-
-    std::cout << "\n\n" << "---------------\n";
-    std::cout << "Starting: " << path << "\n";
-
     bool tamperDetected = false;
+    bool blacklistProcPresent = false;;
 
+    if(hDriver)DeviceIoControl(hDriver, IOCTL_WALK_PROCESS_LIST, NULL, NULL, NULL, NULL, NULL, NULL);
     if(hDriver)DeviceIoControl(hDriver, IOCTL_VERIFY_SNAPSHOT_HASH, NULL, NULL, &tamperDetected, sizeof(bool), NULL, NULL);
 
     if (tamperDetected)
@@ -71,7 +67,24 @@ int main()
         std::cout << "tamper!!";
     }
 
-    std::cin >> path;
+    //std::srand(std::time(0));
+
+    using namespace std::chrono_literals;
+
+    if (hDriver)
+    {
+        bool tamperDetected = false;
+
+        DeviceIoControl(hDriver, IOCTL_VERIFY_SNAPSHOT_HASH, NULL, 0, &tamperDetected, sizeof(tamperDetected), NULL, NULL);
+
+        if (tamperDetected)
+        {
+            std::cout << "tamper!!\n";
+        }
+    }
+
+    std::string x;
+    std::cin >> x;
 
     if(hDriver) CloseHandle(hDriver);
     UnloadDriver();

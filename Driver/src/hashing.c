@@ -128,6 +128,13 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
     int exeHdr;
     USHORT sections, sOptHdr;
 
+    if (!MmIsAddressValid((PVOID)procbase))
+    {
+        DbgPrint("address invalid. returning..");
+        ObDereferenceObject(process);
+        return STATUS_UNSUCCESSFUL;
+    }
+
     // This is pretty scuffed, might eventually use windows structures. But eh
 
     exeHdr = *(int*)(procbase + 0x3C);  // File address of new exe header
@@ -136,6 +143,8 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
     sOptHdr = *(USHORT*)(addr + 0x14);  // Size of OptionalHeader
     addr = addr + 0x18;                 // Optional header
     addr = addr + sOptHdr;              // Section header
+
+    
 
     for (USHORT i = 0; i < sections; i++)
     {
@@ -225,12 +234,15 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
     KAPC_STATE ApcState;
     uintptr_t offset = 0x0;
     BOOLEAN tampered = FALSE;
+    NTSTATUS status = STATUS_SUCCESS;
 
     UNREFERENCED_PARAMETER(DeviceObject);
     UNREFERENCED_PARAMETER(Irp);
 
+    if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process)))
+        goto noprocess;
+
     // Use KeStackAttachProcess to attach to the user-mode space
-    PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process);
     KeStackAttachProcess((PRKPROCESS)process, &ApcState);
 
 
@@ -246,24 +258,23 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
         {
             unsigned char hash[32];
 
-            ComputeSHA256(code, CODE_LENGTH, hash);
-            if (memcmp(&g_DriverExtention->hashes->hash, &hash, sizeof(hash)) == 0)
-            {
-                tampered = TRUE;
-                DbgPrint("No tamper took place\n");
-            }
-            else
-            {
-                DbgPrint("WARNING: Tampering!\n");
-            }
+            status = ComputeSHA256(code, CODE_LENGTH, hash);
+            tampered = !(memcmp(&g_DriverExtention->hashes->hash, &hash, sizeof(hash)) == 0);
         }
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
         DbgPrint("Exception hit!\n");
         tampered = TRUE;
-        goto fail;
+        status = STATUS_UNSUCCESSFUL;
     }
+
+    if(tampered)
+        DbgPrint("Code tampering!");
+    else
+        goto fail;
+
+    if (!NT_SUCCESS(status)) goto fail; 
 
 
     // Finish I/O request
@@ -273,17 +284,20 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 
     if (buffOutLength < sizeof(tampered)) goto fail;
 
-    RtlCopyMemory(&buffOut, &tampered, sizeof(tampered));
+    RtlCopyMemory(buffOut, &tampered, sizeof(tampered));
     Irp->IoStatus.Status = STATUS_SUCCESS;
     Irp->IoStatus.Information = sizeof(tampered);
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    ObDereferenceObject(process);
 
     KeUnstackDetachProcess(&ApcState); // go back to own address space
     return STATUS_SUCCESS;
 
 
 fail: // something went wrong
+    ObDereferenceObject(process);
     KeUnstackDetachProcess(&ApcState); // go back to own address space
+noprocess:
     Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
     Irp->IoStatus.Information = 0;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
