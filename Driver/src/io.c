@@ -1,8 +1,10 @@
 #include "io.h"
 #include "callbacks.h"
 #include "hashing.h"
+#include "moufltr.h"
+#include <kbdmou.h> 
 
-#define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS) // should not be any access!
 #define IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20002, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_SNAPSHOT_HASH_TEXT_SECTION		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20003, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_VERIFY_SNAPSHOT_HASH				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -138,6 +140,56 @@ NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 
 NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 {
+	// Is the IRP for the Anti Cheat driver?
+	if (IsACDevice(DeviceObject))
+	{
+		PIO_STACK_LOCATION irpSp;
+		ULONG IOCTL_CODE = 0;
+
+		UNREFERENCED_PARAMETER(DeviceObject);
+
+		irpSp = IoGetCurrentIrpStackLocation(Irp);
+		IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
+		switch (IOCTL_CODE)
+		{
+		case IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE:
+			DbgPrint("Process Terminated");
+			break;
+		case IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH:
+			HandleProcessLaunch(Irp);
+			DbgPrint("Process Launched");
+			break;
+		case IOCTL_SNAPSHOT_HASH_TEXT_SECTION:
+			TakeHashSnapshot(DeviceObject, Irp);
+			break;
+		case IOCTL_VERIFY_SNAPSHOT_HASH:
+			VerifyHashSnapshot(DeviceObject, Irp);
+			goto end;
+			break;
+		case IOCTL_WALK_PROCESS_LIST:
+			WalkProcessList(DeviceObject, Irp);
+			//goto end; TODO: implement IRP handling for process scanning.
+			break;
+		case IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE:
+			ScanManuallyMappedCode(DeviceObject, Irp);
+			break;
+		}
+
+		Irp->IoStatus.Status = STATUS_SUCCESS;
+		Irp->IoStatus.Information = 0;
+		IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	}
+	else
+	{
+		return PassIRP(DeviceObject, Irp);
+	}
+
+end:
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS InternalDispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+{
 	PIO_STACK_LOCATION irpSp;
 	ULONG IOCTL_CODE = 0;
 
@@ -147,45 +199,57 @@ NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
 	switch (IOCTL_CODE)
 	{
-	case IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE:
-		DbgPrint("Process Terminated");
-		break;
-	case IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH:
-		HandleProcessLaunch(Irp);
-		DbgPrint("Process Launched");
-		break;
-	case IOCTL_SNAPSHOT_HASH_TEXT_SECTION:
-		TakeHashSnapshot(DeviceObject, Irp);
-		break;
-	case IOCTL_VERIFY_SNAPSHOT_HASH:
-		VerifyHashSnapshot(DeviceObject, Irp);
-		goto end;
-		break;
-	case IOCTL_WALK_PROCESS_LIST:
-		WalkProcessList(DeviceObject, Irp);
-		//goto end; TODO: implement IRP handling for process scanning.
-		break;
-	case IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE:
-		ScanManuallyMappedCode(DeviceObject, Irp);
+	case IOCTL_INTERNAL_MOUSE_CONNECT:
+	{
+		PCONNECT_DATA connectData =
+			(PCONNECT_DATA)irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
+
+		if (connectData == NULL || connectData->ClassService == NULL) 
+		{
+			Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
+			Irp->IoStatus.Information = 0;
+			IoCompleteRequest(Irp, IO_NO_INCREMENT);
+			return STATUS_INVALID_PARAMETER;
+		}
+
+		((PFDEVICE_EXTENSION)DeviceObject->DeviceExtension)->UpperConnectData = *connectData;
+
+		connectData->ClassService = (PVOID)MouseCallback;
+		connectData->ClassDeviceObject = DeviceObject;
+
 		break;
 	}
-
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-
-end:
-	return STATUS_SUCCESS;
+	}
+	return PassIRP(DeviceObject, Irp);
 }
 
 NTSTATUS CreateCloseHandler(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 {
-	UNREFERENCED_PARAMETER(DeviceObject);
 
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	
+	// Is the IRP for the Anti Cheat driver?
+	if (IsACDevice(DeviceObject))
+	{
+		UNREFERENCED_PARAMETER(DeviceObject);
 
-	return STATUS_SUCCESS;
+		Irp->IoStatus.Status = STATUS_SUCCESS;
+		Irp->IoStatus.Information = 0;
+		IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+		return STATUS_SUCCESS;
+	}
+	else
+	{
+		IoSkipCurrentIrpStackLocation(Irp);
+		PFDEVICE_EXTENSION devExt = (PFDEVICE_EXTENSION)DeviceObject->DeviceExtension;
+		return IoCallDriver(devExt->NextLowerDeviceObject, Irp);
+	}
+
+	// // obselete..
+	// UNREFERENCED_PARAMETER(DeviceObject);
+	// 
+	// Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
+	// Irp->IoStatus.Information = 0;
+	// IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	// 
+	// return STATUS_DEVICE_DOES_NOT_EXIST;
 }

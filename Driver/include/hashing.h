@@ -8,7 +8,7 @@ NTSTATUS ComputeSHA256(
     _Out_writes_bytes_(32) unsigned char* hash
 );
 
-NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* text, uintptr_t offset);
+NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* text, ULONG* length, uintptr_t offset);
 
 NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp);
 

@@ -16,9 +16,19 @@
 
 int main()
 {
+    //if (!CopyDriverToFolder())
+    //{
+    //    std::cout << "Could not copy file to Kernel32/";
+    //    return 0;
+    //}
     if (!InitializeDriver())
     {
         std::cout << "Could not start Anti Cheat";
+        return 0;
+    }
+    if (!InitializeFilterDriver())
+    {
+        std::cout << "Could not register Filter";
         return 0;
     }
 
@@ -89,6 +99,11 @@ int main()
     std::cin >> x;
 
     if(hDriver) CloseHandle(hDriver);
+
+    std::string y;
+    std::cin >> y;
+
+
     UnloadDriver();
 
     return 1;

@@ -113,7 +113,7 @@ static void PrintSHA256(_In_reads_bytes_(32) unsigned char* hash)
 // ---------------------------------------------------------------------------------------------------------------
 
 
-NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
+NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, ULONG* length, uintptr_t offset)
 {
 	PEPROCESS process;
     uintptr_t procbase = 0, codeBase = 0;
@@ -152,9 +152,10 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
         {
             codeBase = procbase + *(DWORD*)(addr + 0x0C);
             text_size = *(ULONG*)(addr + 0x08);
+            *length = text_size;
 
-            if (offset + CODE_LENGTH > text_size)
-                break;
+            //if (offset + CODE_LENGTH > text_size)
+            //    break;
 
             codeBase += offset;
 
@@ -178,23 +179,24 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, uintptr_t offset)
 
 NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 {
-	PUCHAR code = NULL;
-	PEPROCESS process;
-	KAPC_STATE ApcState;
+    PUCHAR code = NULL;
+    ULONG codeLength = 0;
+    PEPROCESS process;
+    KAPC_STATE ApcState;
     uintptr_t offset = 0x0;
 
-	UNREFERENCED_PARAMETER(DeviceObject);
-	UNREFERENCED_PARAMETER(Irp);
+    UNREFERENCED_PARAMETER(DeviceObject);
+    UNREFERENCED_PARAMETER(Irp);
 
-	// Use KeStackAttachProcess to attach to the user-mode space
-	PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process);
-	KeStackAttachProcess((PRKPROCESS)process, &ApcState);
-
-
-	//code = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, CODE_LENGTH, 'edoc');
+    // Use KeStackAttachProcess to attach to the user-mode space
+    PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process);
+    KeStackAttachProcess((PRKPROCESS)process, &ApcState);
 
 
-	if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, offset)))
+    //code = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, CODE_LENGTH, 'edoc');
+
+
+    if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, &codeLength, offset)))
 	{
 		DbgPrint("Fail..");
 		return STATUS_UNSUCCESSFUL;
@@ -206,7 +208,7 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		{
 			unsigned char hash[32];
 
-			ComputeSHA256(code, CODE_LENGTH, hash);
+			ComputeSHA256(code, codeLength, hash);
             PrintSHA256(hash);
             DbgPrint("First byte: %02x", code[0]);
 
@@ -230,6 +232,7 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 {
     PUCHAR code = NULL;
+    ULONG codeLength = 0;
     PEPROCESS process;
     KAPC_STATE ApcState;
     uintptr_t offset = 0x0;
@@ -246,7 +249,7 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
     KeStackAttachProcess((PRKPROCESS)process, &ApcState);
 
 
-    if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, offset)))
+    if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, &codeLength, offset)))
     {
         DbgPrint("Failed to get .text section..\n");
         goto fail;
@@ -258,7 +261,7 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
         {
             unsigned char hash[32];
 
-            status = ComputeSHA256(code, CODE_LENGTH, hash);
+            status = ComputeSHA256(code, codeLength, hash);
             tampered = !(memcmp(&g_DriverExtention->hashes->hash, &hash, sizeof(hash)) == 0);
         }
     }

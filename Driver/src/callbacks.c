@@ -94,10 +94,13 @@ ObPreOpCallbackRoutine(
 	if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)PID, &gameProcess)))
 		goto end;
 
-	if (targetProcess != gameProcess) goto end; // Not our game being targeted
+	if (targetProcess != gameProcess)
+	{
+		ObDereferenceObject(gameProcess);
+		goto end; // Not our game being targeted
+	}
 
 	ObDereferenceObject(gameProcess);
-
 
 	//TODO: when matching PID's are encountered, dont block the access..
 

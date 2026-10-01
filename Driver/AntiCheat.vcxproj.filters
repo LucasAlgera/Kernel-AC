@@ -36,6 +36,9 @@
     <ClCompile Include="src\hashing.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\moufltr.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\callbacks.h">
@@ -51,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="include\hashing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\moufltr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

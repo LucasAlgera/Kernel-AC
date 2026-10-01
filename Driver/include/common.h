@@ -1,5 +1,6 @@
 #pragma once
 #include "ntifs.h"
+#include <kbdmou.h>
 
 // Import undocumented exported functions from ntoskrnl.exe:
 EXTERN_C NTSYSAPI UCHAR* PsGetProcessImageFileName(		__in PEPROCESS Process);
@@ -22,10 +23,24 @@ typedef struct _DRIVER_SETTINGS
 {
 	DWORD PID;					// PiD of the game
 	HASH_STORAGE hashes[10];
+	PDEVICE_OBJECT DeviceObject;
 } DRIVER_SETTINGS, * PDRIVER_SETTINGS;
 #endif
-
 extern PDRIVER_SETTINGS g_DriverExtention;
+
+
+#ifndef _FDRIVER_SETTINGS_DEFINED
+#define _FDRIVER_SETTINGS_DEFINED
+// Filter device extension
+typedef struct _FDEVICE_EXTENSION {
+	PDEVICE_OBJECT DeviceObject;           // FDO
+	PDEVICE_OBJECT NextLowerDeviceObject;  // lower device in stack
+	PDEVICE_OBJECT PhysicalDeviceObject;
+	CONNECT_DATA   UpperConnectData;
+} FDEVICE_EXTENSION, * PFDEVICE_EXTENSION;
+#endif
+extern PFDEVICE_EXTENSION g_FilterDeviceExtension;
+
 
 #define WHITELIST_SIZE 5
 #define MAX_PROCESS_NAME_LENGTH 256
