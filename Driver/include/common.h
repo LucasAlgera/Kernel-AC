@@ -24,6 +24,11 @@ typedef struct _DRIVER_SETTINGS
 	DWORD PID;					// PiD of the game
 	HASH_STORAGE hashes[10];
 	PDEVICE_OBJECT DeviceObject;
+	struct _MouseData
+	{
+		ULONG ButtonFlags;
+		LARGE_INTEGER Time;
+	} MouseData;
 } DRIVER_SETTINGS, * PDRIVER_SETTINGS;
 #endif
 extern PDRIVER_SETTINGS g_DriverExtention;

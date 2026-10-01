@@ -7,18 +7,20 @@ VOID MouseCallback(PDEVICE_OBJECT DeviceObject, PMOUSE_INPUT_DATA InputDataStart
 {
     PFDEVICE_EXTENSION ext = (PFDEVICE_EXTENSION)DeviceObject->DeviceExtension;
 
-    DbgPrint("Hit a mouse callback!");
+	ULONG mouseMask = MOUSE_LEFT_BUTTON_DOWN; // maybe more?
 
-    // Inspect/transform the packets here.
     for (PMOUSE_INPUT_DATA p = InputDataStart; p < InputDataEnd; ++p)
     {
-        // p->Flags
-        // p->ButtonFlags
-        // p->ButtonData
-        // p->LastX
-        // p->LastY
-        // etc.
+		if (p->ButtonFlags & mouseMask)
+		{
+			ReportMouseClick(p);
+		}
     }
+
+	// TODO: 
+	// - Could do some mouse behavior checking? As is wether movement is too linear (robot-like)
+	// - If there are no packets, but the game is playing there is a sign of cheating!
+
 
     (*(PSERVICE_CALLBACK_ROUTINE)ext->UpperConnectData.ClassService)(
         ext->UpperConnectData.ClassDeviceObject,
@@ -26,6 +28,17 @@ VOID MouseCallback(PDEVICE_OBJECT DeviceObject, PMOUSE_INPUT_DATA InputDataStart
         InputDataEnd,
         InputDataConsumed
     );
+}
+
+VOID ReportMouseClick(PMOUSE_INPUT_DATA p)
+{
+    LARGE_INTEGER CurrentTime;
+    KeQuerySystemTime(&CurrentTime);
+
+    g_DriverExtention->MouseData.ButtonFlags = p->ButtonFlags;
+    g_DriverExtention->MouseData.Time = CurrentTime;
+	DbgPrint("Hit a mouse callback!");
+    return;
 }
 
 NTSTATUS PassIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)

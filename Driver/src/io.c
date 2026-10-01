@@ -243,13 +243,4 @@ NTSTATUS CreateCloseHandler(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		PFDEVICE_EXTENSION devExt = (PFDEVICE_EXTENSION)DeviceObject->DeviceExtension;
 		return IoCallDriver(devExt->NextLowerDeviceObject, Irp);
 	}
-
-	// // obselete..
-	// UNREFERENCED_PARAMETER(DeviceObject);
-	// 
-	// Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
-	// Irp->IoStatus.Information = 0;
-	// IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	// 
-	// return STATUS_DEVICE_DOES_NOT_EXIST;
 }
