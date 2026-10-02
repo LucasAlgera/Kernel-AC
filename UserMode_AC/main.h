@@ -2,6 +2,8 @@
 #include <Windows.h>
 #include <vector>
 #define DRIVER_NAME L"KernelAC"
+#define PIPE_NAME "\\\\.\\pipe\\AC"
+#define BUF_SIZE  32
 
 HANDLE g_service = nullptr;
 
@@ -23,30 +25,17 @@ HANDLE CreateNewProcess(std::string path)
     return pi.hProcess;
 }
 
-bool CopyDriverToFolder()
+bool CopyOwnFileTo(const std::string& fn, const std::string& d)
 {
-    WCHAR CurrentDir[MAX_PATH];
-    DWORD result = GetCurrentDirectoryW(MAX_PATH, CurrentDir);
+    char currentDir[MAX_PATH];
 
+    DWORD result = GetCurrentDirectoryA(MAX_PATH, currentDir);
     if (result == 0 || result >= MAX_PATH)
-        return FALSE;
+        return false;
 
-    WCHAR DriverPath[MAX_PATH];
-    if (swprintf_s(DriverPath, MAX_PATH, L"%s\\AntiCheat.sys", CurrentDir) < 0)
-        return FALSE;
+    std::string filePath = std::string(currentDir) + "\\" + fn;
 
-    WCHAR ExpandedRoot[MAX_PATH];
-    if (ExpandEnvironmentStringsW(L"%SystemRoot%", ExpandedRoot, MAX_PATH) == 0)
-        return FALSE;
-
-    WCHAR DestPath[MAX_PATH];
-    if (swprintf_s(DestPath, MAX_PATH, L"%s\\System32\\drivers\\AntiCheat.sys", ExpandedRoot) < 0)
-        return FALSE;
-
-    if (!CopyFileW(DriverPath, DestPath, FALSE))
-        return FALSE;
-
-    return TRUE;
+    return CopyFileA(filePath.c_str(), d.c_str(), FALSE) != FALSE;
 }
 
 bool InitializeDriver()
@@ -290,4 +279,83 @@ void UnloadDriver()
 
     CloseServiceHandle(hService);
     CloseServiceHandle(hSCManager);
+}
+
+HANDLE hPipe;
+
+bool CreateServer()
+{
+    hPipe = CreateNamedPipeA(
+        PIPE_NAME,
+        PIPE_ACCESS_DUPLEX,
+        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+        1,       
+        BUF_SIZE,
+        BUF_SIZE,
+        0,       
+        NULL);
+
+    if (hPipe == INVALID_HANDLE_VALUE)
+    {
+        std::cout << "Cant create Pipe.\n";
+        return false;
+    }
+    return true;
+}
+
+bool IsMouseClicked()
+{
+    if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
+        std::cout << "ConnectNamedPipe failed: " << GetLastError() << "\n";
+        CloseHandle(hPipe);
+        return false;
+    }
+
+    char buf[BUF_SIZE];
+    DWORD bytesRead;
+    if (ReadFile(hPipe, buf, BUF_SIZE, &bytesRead, NULL) && bytesRead > 0) 
+    {
+        if (bytesRead == 13 && memcmp(buf, "MOUSE_CLICKED", 13) == 0) 
+        { 
+            std::cout << "Mouse clicked!";
+            return true;
+        }
+    }
+
+    CloseHandle(hPipe);
+    return false;
+}
+
+bool InjectDLL(DWORD PID, const char* dllName)
+{
+    HANDLE hproc = OpenProcess(PROCESS_ALL_ACCESS, false, PID);
+
+    SIZE_T pathLen = strlen(dllName) + 1;
+
+    void* addr = VirtualAllocEx(hproc, NULL, pathLen, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (addr != nullptr)
+    {
+        if(!WriteProcessMemory(hproc, addr, dllName, pathLen, NULL))
+        {
+            VirtualFreeEx(hproc, addr, 0, MEM_RELEASE);
+            return false;
+        }
+        FARPROC pLoadLib = GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
+
+        HANDLE htread = CreateRemoteThread(hproc, NULL, 0, (LPTHREAD_START_ROUTINE)pLoadLib, addr, 0, NULL);
+        if(!htread)
+        {
+            VirtualFreeEx(hproc, addr, 0, MEM_RELEASE);
+            return false;
+        }
+        WaitForSingleObject(htread, INFINITE);
+
+        CloseHandle(htread);
+        VirtualFreeEx(hproc, addr, 0, MEM_RELEASE);
+        CloseHandle(hproc);
+
+        std::cout << "DLL loaded into game memory.\n";
+        return true;
+    }
+    return false;
 }

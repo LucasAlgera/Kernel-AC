@@ -16,11 +16,6 @@
 
 int main()
 {
-    //if (!CopyDriverToFolder())
-    //{
-    //    std::cout << "Could not copy file to Kernel32/";
-    //    return 0;
-    //}
     if (!InitializeDriver())
     {
         std::cout << "Could not start Anti Cheat";
@@ -50,14 +45,18 @@ int main()
     }
 
     HANDLE pHandle;
-    pHandle = CreateNewProcess("C:/Windows/system32/notepad.exe");
+    std::string procpath = "C:/Windows/system32/notepad.exe";
+    pHandle = CreateNewProcess(procpath);
     if (!pHandle)
     {
         std::cout << "WARNING: Could not start process! \n";
         return 0;
-    }
-
+    }    
     DWORD PID = GetProcessId(pHandle);
+
+    CopyOwnFileTo("\\dllservice.dll", procpath);
+    InjectDLL(PID, "dllservice.dll");
+
 
     if (hDriver == INVALID_HANDLE_VALUE) {
         std::cerr << "Failed to get driver handle. Error: " << GetLastError() << std::endl;
@@ -93,6 +92,17 @@ int main()
         {
             std::cout << "tamper!!\n";
         }
+    }
+
+    if (!CreateServer())
+        return 0;
+
+    std::string input;
+    while (true) {
+        IsMouseClicked();
+
+        std::getline(std::cin, input);
+        if (input == "Q") break;
     }
 
     std::string x;
