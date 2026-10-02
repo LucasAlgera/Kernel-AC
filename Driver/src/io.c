@@ -1,3 +1,10 @@
+/*
+This file mostly contains I/O handling, though some smaller Anti Cheat tasks also get done here:
+- walking process list 
+- scanning code mapping
+- handling process launching
+*/
+
 #include "io.h"
 #include "callbacks.h"
 #include "hashing.h"
@@ -15,22 +22,6 @@
 #define MAX_PROCESSES		5000  // should be fine...
 
 
-NTSTATUS HandleProcessLaunch(IRP* Irp)
-{
-	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
-	ULONG inBufferLength = irpSp->Parameters.DeviceIoControl.InputBufferLength;
-	PVOID lpBufferIn = Irp->AssociatedIrp.SystemBuffer;
-
-	if (inBufferLength != sizeof(4)) // <- DWORD Length
-	{
-		return STATUS_UNSUCCESSFUL;
-	}
-
-	unsigned long PID = *(unsigned long*)lpBufferIn;
-	g_DriverExtention->PID = PID;
-	return STATUS_SUCCESS;
-}
-
 #define BLACKLIST_SIZE 4 
 CHAR g_BlackList[BLACKLIST_SIZE][MAX_PROCESS_NAME_LENGTH] =
 {
@@ -41,104 +32,15 @@ CHAR g_BlackList[BLACKLIST_SIZE][MAX_PROCESS_NAME_LENGTH] =
 	// probably more..
 };
 
-NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp)
-{
-	UNREFERENCED_PARAMETER(DeviceObject);
-	UNREFERENCED_PARAMETER(Irp);
-	PEPROCESS startProcess = PsGetCurrentProcess();
-
-	//Bit risky to try this on other windows versions because Microsoft keeps changing their offsets...
-	PLIST_ENTRY currentLink = (PLIST_ENTRY)((ULONG_PTR)startProcess + PROCESS_LINK_OFFSET); 
-	PLIST_ENTRY nextLink = currentLink->Flink;
-
-	BOOLEAN flagged = FALSE;
-	int idx = 0;
-
-	while (nextLink != currentLink) {
-		PEPROCESS process = (PEPROCESS)((ULONG_PTR)nextLink - PROCESS_LINK_OFFSET);
-
-		//HANDLE pid = PsGetProcessId(process);
-		UCHAR* imageFileName = PsGetProcessImageFileName(process);
-
-		for (int i = 0; i < BLACKLIST_SIZE; i++)
-		{
-			PCHAR blProcess = g_BlackList[i];
-			ANSI_STRING str1;
-			ANSI_STRING str2;
-
-			RtlInitAnsiString(&str1, (PCSZ)blProcess);
-			RtlInitAnsiString(&str2, (PCSZ)imageFileName);
-
-			if (RtlCompareString(&str1, &str2, TRUE) == 0)
-			{
-				flagged = TRUE;
-				break;
-			}
-		}
-
-		if (flagged)
-			break;
-
-		// if not jump to the next link in the chain
-		nextLink = nextLink->Flink;
-		idx++;
-
-		if (idx > MAX_PROCESSES)
-			break; // something probably went wrong, dont want to spend more time in this loop
-	}
-
-	if (flagged)
-		DbgPrint("Flagged a process!");
-
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
-{
-	PIO_STACK_LOCATION irpSp;
-	ULONG IOCTL_CODE = 0;
-	PEPROCESS process;
-
-	UNREFERENCED_PARAMETER(DeviceObject);
-
-	irpSp = IoGetCurrentIrpStackLocation(Irp);
-	IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
-
-	if(!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process)))
-		return STATUS_UNSUCCESSFUL;
-
-	PVOID baseAddress = NULL;
-	MEMORY_BASIC_INFORMATION mbi;
-
-	KAPC_STATE apcState;
-	KeStackAttachProcess(process, &apcState);
-
-	while (NT_SUCCESS(ZwQueryVirtualMemory(
-		process,
-		baseAddress,
-		MemoryBasicInformation,
-		&mbi,
-		sizeof(mbi),
-		NULL))) 
-	{
-		if (mbi.State == MEM_COMMIT &&
-			(mbi.Protect & PAGE_EXECUTE_READ ||
-				mbi.Protect & PAGE_EXECUTE_READWRITE ||
-				mbi.Protect & PAGE_EXECUTE_WRITECOPY) &&
-			mbi.Type == MEM_PRIVATE)
-		{
-			DbgPrint("Found manually mapped code!");
-			return STATUS_UNSUCCESSFUL;
-		}
-		baseAddress = (PVOID)((ULONG_PTR)mbi.BaseAddress + mbi.RegionSize);
-		if ((ULONG_PTR)baseAddress >= 0x7FFFFFFFFFFF) break; // user-space limit
-	}
-	KeUnstackDetachProcess(&apcState);
-
-	return STATUS_SUCCESS;
-}
 
 NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+/*
+IOCTL dispatcher for user-mode commands. 
+
+Used by: 
+	- Deviceless driver
+	- Filter driver ?
+*/
 {
 	// Is the IRP for the Anti Cheat driver?
 	if (IsACDevice(DeviceObject))
@@ -150,14 +52,15 @@ NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
 		IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
+
 		switch (IOCTL_CODE)
 		{
 		case IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE:
-			DbgPrint("Process Terminated");
+			DbgPrint("[AC] Process Terminated");
 			break;
 		case IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH:
 			HandleProcessLaunch(Irp);
-			DbgPrint("Process Launched");
+			DbgPrint("[AC] Process Launched");
 			break;
 		case IOCTL_SNAPSHOT_HASH_TEXT_SECTION:
 			TakeHashSnapshot(DeviceObject, Irp);
@@ -189,6 +92,12 @@ end:
 }
 
 NTSTATUS InternalDispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+/*
+IOCTL dispatcher for driver-to-driver commands.
+ 
+Used by:
+	- Filter driver
+*/
 {
 	PIO_STACK_LOCATION irpSp;
 	ULONG IOCTL_CODE = 0;
@@ -224,6 +133,13 @@ NTSTATUS InternalDispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 }
 
 NTSTATUS CreateCloseHandler(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+/*
+Generic cleanup/pass along function
+
+Used by:
+	- Deviceless driver
+	- Filter driver
+*/
 {
 
 	// Is the IRP for the Anti Cheat driver?
@@ -243,4 +159,117 @@ NTSTATUS CreateCloseHandler(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		PFDEVICE_EXTENSION devExt = (PFDEVICE_EXTENSION)DeviceObject->DeviceExtension;
 		return IoCallDriver(devExt->NextLowerDeviceObject, Irp);
 	}
+}
+
+NTSTATUS HandleProcessLaunch(IRP* Irp)
+{
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
+	ULONG inBufferLength = irpSp->Parameters.DeviceIoControl.InputBufferLength;
+	PVOID lpBufferIn = Irp->AssociatedIrp.SystemBuffer;
+
+	if (inBufferLength != sizeof(4)) // <- DWORD Length
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	unsigned long PID = *(unsigned long*)lpBufferIn;
+	g_DriverExtention->PID = PID;
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+{
+	UNREFERENCED_PARAMETER(DeviceObject);
+	UNREFERENCED_PARAMETER(Irp);
+	PEPROCESS startProcess = PsGetCurrentProcess();
+
+	// Bit risky to try this on other windows versions because Microsoft keeps changing their offsets...
+	PLIST_ENTRY currentLink = (PLIST_ENTRY)((ULONG_PTR)startProcess + PROCESS_LINK_OFFSET);
+	PLIST_ENTRY nextLink = currentLink->Flink;
+
+	BOOLEAN flagged = FALSE;
+	int idx = 0;
+
+	while (nextLink != currentLink) {
+		PEPROCESS process = (PEPROCESS)((ULONG_PTR)nextLink - PROCESS_LINK_OFFSET);
+
+		// HANDLE pid = PsGetProcessId(process);
+		UCHAR* imageFileName = PsGetProcessImageFileName(process);
+
+		for (int i = 0; i < BLACKLIST_SIZE; i++)
+		{
+			PCHAR blProcess = g_BlackList[i];
+			ANSI_STRING str1;
+			ANSI_STRING str2;
+
+			RtlInitAnsiString(&str1, (PCSZ)blProcess);
+			RtlInitAnsiString(&str2, (PCSZ)imageFileName);
+
+			if (RtlCompareString(&str1, &str2, TRUE) == 0)
+			{
+				flagged = TRUE;
+				break;
+			}
+		}
+
+		if (flagged)
+			break;
+
+		// if not jump to the next link in the chain
+		nextLink = nextLink->Flink;
+		idx++;
+
+		if (idx > MAX_PROCESSES)
+			break; // something probably went wrong, dont want to spend more time in this loop
+	}
+
+	if (flagged)
+		DbgPrint("[AC] Flagged a process!");
+
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+{
+	PIO_STACK_LOCATION irpSp;
+	ULONG IOCTL_CODE = 0;
+	PEPROCESS process;
+
+	UNREFERENCED_PARAMETER(DeviceObject);
+
+	irpSp = IoGetCurrentIrpStackLocation(Irp);
+	IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
+
+	if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process)))
+		return STATUS_UNSUCCESSFUL;
+
+	PVOID baseAddress = NULL;
+	MEMORY_BASIC_INFORMATION mbi;
+
+	KAPC_STATE apcState;
+	KeStackAttachProcess(process, &apcState);
+
+	while (NT_SUCCESS(ZwQueryVirtualMemory(
+		process,
+		baseAddress,
+		MemoryBasicInformation,
+		&mbi,
+		sizeof(mbi),
+		NULL)))
+	{
+		if (mbi.State == MEM_COMMIT &&
+			(mbi.Protect & PAGE_EXECUTE_READ ||
+				mbi.Protect & PAGE_EXECUTE_READWRITE ||
+				mbi.Protect & PAGE_EXECUTE_WRITECOPY) &&
+			mbi.Type == MEM_PRIVATE)
+		{
+			DbgPrint("[AC] Found manually mapped code!");
+			return STATUS_UNSUCCESSFUL;
+		}
+		baseAddress = (PVOID)((ULONG_PTR)mbi.BaseAddress + mbi.RegionSize);
+		if ((ULONG_PTR)baseAddress >= 0x7FFFFFFFFFFF) break; // user-space limit
+	}
+	KeUnstackDetachProcess(&apcState);
+
+	return STATUS_SUCCESS;
 }

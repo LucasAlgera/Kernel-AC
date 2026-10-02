@@ -103,7 +103,7 @@ static void PrintSHA256(_In_reads_bytes_(32) unsigned char* hash)
         RtlStringCchPrintfA(&hexString[i * 2], 65 - (i * 2), "%02x", hash[i]);
     }
 
-    DbgPrint("Hash: %s\n", hexString);
+    DbgPrint("[AC] Hash: %s\n", hexString);
 }
 
 
@@ -130,7 +130,7 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, ULONG* length, uintptr
 
     if (!MmIsAddressValid((PVOID)procbase))
     {
-        DbgPrint("address invalid. returning..");
+        DbgPrint("[AC] address invalid. returning..");
         ObDereferenceObject(process);
         return STATUS_UNSUCCESSFUL;
     }
@@ -143,8 +143,6 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, ULONG* length, uintptr
     sOptHdr = *(USHORT*)(addr + 0x14);  // Size of OptionalHeader
     addr = addr + 0x18;                 // Optional header
     addr = addr + sOptHdr;              // Section header
-
-    
 
     for (USHORT i = 0; i < sections; i++)
     {
@@ -178,6 +176,9 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* code, ULONG* length, uintptr
 
 
 NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+/*
+Hashes the code (.text) section and stores it in g_DriverExtention.
+*/
 {
     PUCHAR code = NULL;
     ULONG codeLength = 0;
@@ -195,10 +196,9 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 
     //code = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, CODE_LENGTH, 'edoc');
 
-
     if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, &codeLength, offset)))
 	{
-		DbgPrint("Fail..");
+		DbgPrint("[AC] Fail..");
 		return STATUS_UNSUCCESSFUL;
 	}
 
@@ -210,7 +210,7 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 
 			ComputeSHA256(code, codeLength, hash);
             PrintSHA256(hash);
-            DbgPrint("First byte: %02x", code[0]);
+            DbgPrint("[AC] First byte: %02x", code[0]);
 
             RtlCopyMemory(&g_DriverExtention->hashes->hash, &hash, sizeof(hash));
             if(offset)
@@ -220,7 +220,7 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
-		DbgPrint("FAIL!");
+		DbgPrint("[AC] FAIL!");
 	}
 
 	KeUnstackDetachProcess(&ApcState); // go back to own address space
@@ -230,6 +230,9 @@ NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 }
 
 NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+/*
+Hashes the code (.text) section and compares it to the stored hash in g_DriverExtention.
+*/
 {
     PUCHAR code = NULL;
     ULONG codeLength = 0;
@@ -251,7 +254,7 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 
     if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, &codeLength, offset)))
     {
-        DbgPrint("Failed to get .text section..\n");
+        DbgPrint("[AC] Failed to get .text section..\n");
         goto fail;
     }
 
@@ -267,13 +270,13 @@ NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
-        DbgPrint("Exception hit!\n");
+        DbgPrint("[AC] Exception hit!\n");
         tampered = TRUE;
         status = STATUS_UNSUCCESSFUL;
     }
 
     if(tampered)
-        DbgPrint("Code tampering!");
+        DbgPrint("[AC] Code tampering!");
     else
         goto fail;
 

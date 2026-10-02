@@ -39,7 +39,7 @@ NTSTATUS RegisterCallbacks()
 	status = ObRegisterCallbacks(&cbr, &rHandle); 
 	if (!NT_SUCCESS(status))
 	{
-		DbgPrint("Failed to initialize Register Callbacks..");
+		DbgPrint("[AC] Failed to initialize Register Callbacks..");
 		return status;
 	}
 	g_callbackHandle = rHandle;
@@ -52,7 +52,7 @@ void UnRegisterCallbacks()
 	if (g_callbackHandle)
 	{
 		ObUnRegisterCallbacks(g_callbackHandle);
-		DbgPrint("Unregistered callbacks");
+		DbgPrint("[AC] nregistered callbacks");
 	}
 }
 
@@ -109,7 +109,7 @@ ObPreOpCallbackRoutine(
 
 		// Dont block the game getting its own handle: 
 		//if ((DWORD)(ULONG_PTR)PPsGetProcessId(IoGetCurrentProcess()) == PID) goto end;
-		DbgPrint("Possibly malicous injection!");
+		DbgPrint("[AC] Possibly malicous injection!");
 	}
 
 
@@ -134,7 +134,7 @@ ObPreOpCallbackRoutine(
 		if (flagged)
 		{
 			UCHAR buffer[256];
-			RtlStringCchPrintfA((NTSTRSAFE_PSTR)buffer, sizeof(buffer), "Hit a callback on %s from %s", targetProcessName, callerProcessName);
+			RtlStringCchPrintfA((NTSTRSAFE_PSTR)buffer, sizeof(buffer), "[AC] Hit a callback on %s from %s", targetProcessName, callerProcessName);
 			DbgPrint("%s", buffer);
 
 			// Remove handle access

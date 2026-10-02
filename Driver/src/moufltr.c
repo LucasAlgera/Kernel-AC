@@ -4,6 +4,9 @@
 
 
 VOID MouseCallback(PDEVICE_OBJECT DeviceObject, PMOUSE_INPUT_DATA InputDataStart, PMOUSE_INPUT_DATA InputDataEnd, PULONG InputDataConsumed)
+/*
+https://learn.microsoft.com/en-us/previous-versions/ff542394(v=vs.85)
+*/
 {
     PFDEVICE_EXTENSION ext = (PFDEVICE_EXTENSION)DeviceObject->DeviceExtension;
 
@@ -37,7 +40,7 @@ VOID ReportMouseClick(PMOUSE_INPUT_DATA p)
 
     g_DriverExtention->MouseData.ButtonFlags = p->ButtonFlags;
     g_DriverExtention->MouseData.Time = CurrentTime;
-	DbgPrint("Hit a mouse callback!");
+	DbgPrint("[AC] Hit a mouse callback!");
     return;
 }
 
@@ -60,7 +63,7 @@ NTSTATUS PassIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		IoCompleteRequest(Irp, IO_NO_INCREMENT);
 		DbgPrintEx(DPFLTR_IHVDRIVER_ID,
 			DPFLTR_INFO_LEVEL,
-			"Device extention not initialized!\n");
+			"[AC] Device extention not initialized!\n");
 		return STATUS_INVALID_DEVICE_REQUEST;
 	}
 
@@ -71,9 +74,9 @@ NTSTATUS PassIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	status = IoCallDriver(devExt->NextLowerDeviceObject, Irp);
 
 	if (NT_SUCCESS(status))
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "Passing IRP SUCCESS!\n");
+		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "[AC] Passing IRP SUCCESS!\n");
 	else
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "Passing IRP FAILED!\n");
+		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "[AC] Passing IRP FAILED!\n");
 
 	return status;
 }
@@ -90,7 +93,7 @@ NTSTATUS PassPowerIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		IoCompleteRequest(Irp, IO_NO_INCREMENT);
 		DbgPrintEx(DPFLTR_IHVDRIVER_ID,
 			DPFLTR_INFO_LEVEL,
-			"Device extention not initialized!\n");
+			"[AC] Device extention not initialized!\n");
 		return STATUS_INVALID_DEVICE_REQUEST;
 	}
 
@@ -101,6 +104,11 @@ NTSTATUS PassPowerIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 }
 
 BOOLEAN IsACDevice(DEVICE_OBJECT* DeviceObject)
+/*
+Is the incoming IRP for the filter driver or our deviceless driver?
+TRUE: deviceless
+FALSE: filter
+*/
 {
 	if (DeviceObject == g_DriverExtention->DeviceObject)
 		return TRUE;

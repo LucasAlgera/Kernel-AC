@@ -8,24 +8,23 @@
 
 UNICODE_STRING g_DeviceName = RTL_CONSTANT_STRING(L"\\Device\\KernelAC");
 UNICODE_STRING g_DeviceSymbolicLink = RTL_CONSTANT_STRING(L"\\??\\KernelAC");
-
 PDRIVER_SETTINGS g_DriverExtention = NULL;
-PFDEVICE_EXTENSION g_FilterDeviceExtension = NULL;
 
 NTSTATUS DriverAddDevice(IN DRIVER_OBJECT* pDriverObject, IN DEVICE_OBJECT* pPhysicalDeviceObject)
+/*
+This function routine gets called as a response to the AddDevice routine from the PnP manager. 
+Our new new device should match the PDO.
+
+NOTE: After this is ran, either a full reboot is needed or I find a way to restart specific PnP devices..
+*/
 {
     UNREFERENCED_PARAMETER(pDriverObject);
 
     NTSTATUS status;
     PDEVICE_OBJECT functionalDeviceObject = NULL;
 
-    DbgPrint("MyDriver: AddDevice PDO=%p\n", pPhysicalDeviceObject);
+    DbgPrint("[AC] MyDriver: AddDevice PDO=%p\n", pPhysicalDeviceObject);
 
-    //
-    // Create a functional device object that matches the PDO device type.
-    // Use NULL for a name (filter device) and copy important characteristics
-    // from the lower device so the stack behavior remains consistent.
-    //
     status = IoCreateDevice(
         pDriverObject,
         sizeof(FDEVICE_EXTENSION),
@@ -36,87 +35,72 @@ NTSTATUS DriverAddDevice(IN DRIVER_OBJECT* pDriverObject, IN DEVICE_OBJECT* pPhy
         &functionalDeviceObject
     );
 
-    if (!NT_SUCCESS(status)) {
-        KdPrint("Failed to create filter device!");
+    if (!NT_SUCCESS(status)) 
+    {
+        DbgPrint("[AC] Failed to create filter device!");
         return status;
     }
 
+    // device extention mostly used for forwarding IRP's to the next device in the stack
     PFDEVICE_EXTENSION devExt = (PFDEVICE_EXTENSION)functionalDeviceObject->DeviceExtension;
     RtlZeroMemory(devExt, sizeof(FDEVICE_EXTENSION));
 
     devExt->DeviceObject = functionalDeviceObject;
     devExt->PhysicalDeviceObject = pPhysicalDeviceObject;
 
-    //
-    // Attach to the device stack and save the pointer.
-    //
     devExt->NextLowerDeviceObject = IoAttachDeviceToDeviceStack(
         functionalDeviceObject,
         pPhysicalDeviceObject
     );
 
-    if (devExt->NextLowerDeviceObject == NULL) {
-        KdPrint("IoAttachDeviceToDeviceStack failed..");
+    if (devExt->NextLowerDeviceObject == NULL) 
+    {
+        DbgPrint("[AC] IoAttachDeviceToDeviceStack failed..");
         IoDeleteDevice(functionalDeviceObject);
         return STATUS_DEVICE_REMOVED;
     }
 
-    //
-    // Copy important flags, characteristics and stack size from the lower device.
-    // This prevents changing behavior expected by the rest of the stack and avoids
-    // stopping I/O (common cause of lost input).
-    //
+    // Copy flags from PDO 
     functionalDeviceObject->Characteristics = pPhysicalDeviceObject->Characteristics;
     functionalDeviceObject->AlignmentRequirement = pPhysicalDeviceObject->AlignmentRequirement;
-    functionalDeviceObject->Flags |= (devExt->NextLowerDeviceObject->Flags &
-        (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE));
-    functionalDeviceObject->StackSize = devExt->NextLowerDeviceObject->StackSize + 1;
-    //
-    // We're ready to receive IRPs.
-    //
-    functionalDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
+    functionalDeviceObject->Flags |= (devExt->NextLowerDeviceObject->Flags & (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE));
+    functionalDeviceObject->StackSize = devExt->NextLowerDeviceObject->StackSize; // (+1)?
+    
+    functionalDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING; // Ready to recieve IRP's
 
-    //
-    // Keep a module-global pointer to the last-created filter extension if you need it.
-    //
-    g_FilterDeviceExtension = devExt;
-
-    DbgPrint("DriverAddDevice succeeded: FDO=%p, NextLower=%p\n",
-             functionalDeviceObject, devExt->NextLowerDeviceObject);
+    DbgPrint("[AC] DriverAddDevice succeeded: FDO=%p, NextLower=%p\n", functionalDeviceObject, devExt->NextLowerDeviceObject);
 
     return STATUS_SUCCESS;
 }
 
-
-// Currently i am softlocked because i dont pass on IRP requests, so mouse input doesnt do anything
-
-NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject,
-    IN PUNICODE_STRING RegistryPath)
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject, IN PUNICODE_STRING RegistryPath)
+/*
+This function is called as the entry point of the driver, important things happening: 
+- Creation of the deviceless driver (software driver) which accepts user-mode IRP's from the AC service. 
+- Setup of MajorFunctions which support dual-mode drivers (filter driver + deviceless driver).
+- Creates symbolic links for the AC service and registers basic callbacks. 
+*/
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
     UNREFERENCED_PARAMETER(RegistryPath);
 
-
+    // Make sure the filter driver passes along most incoming IRP's along 
     for (ULONG i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
     {
         pDriverObject->MajorFunction[i] = PassIRP;
     }
 
-
+    // Set all the specific functionalities
     pDriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchDeviceControl;
+    pDriverObject->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = InternalDispatchDeviceControl;
     pDriverObject->MajorFunction[IRP_MJ_CREATE] = CreateCloseHandler;
     pDriverObject->MajorFunction[IRP_MJ_CLOSE] = CreateCloseHandler;
     pDriverObject->MajorFunction[IRP_MJ_CLEANUP] = CreateCloseHandler;
-    pDriverObject->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = InternalDispatchDeviceControl;
-    pDriverObject->MajorFunction[IRP_MJ_READ] = PassIRP;
-    pDriverObject->MajorFunction[IRP_MJ_POWER] = PassPowerIRP;
-    pDriverObject->MajorFunction[IRP_MJ_PNP] = PassIRP;
-    pDriverObject->DriverUnload = DriverUnload;
     pDriverObject->DriverExtension->AddDevice = DriverAddDevice;
-    // TODO: add DriverObject->DriverExtension->AddDevice and IRP_MJ_PNP!! otherwise filter wont work
+    pDriverObject->DriverUnload = DriverUnload;
 
     // TODO: Make sure some mutex guarding takes place
-    DbgPrint("Entering DriverEntry");
+    DbgPrint("[AC] Entering DriverEntry");
 
 
     status = IoCreateDevice(
@@ -128,44 +112,49 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject,
         FALSE, 
         &pDriverObject->DeviceObject);
 
-    g_DriverExtention = pDriverObject->DeviceObject->DeviceExtension;
-    g_DriverExtention->DeviceObject = pDriverObject->DeviceObject;
+
+    if (pDriverObject->DeviceObject != NULL)
+    {
+        g_DriverExtention = pDriverObject->DeviceObject->DeviceExtension;
+        g_DriverExtention->DeviceObject = pDriverObject->DeviceObject;
+    }
+
 
     if (!NT_SUCCESS(status)) {
-        DbgPrint("IoCreateDevice failed, status %x", status);
+        DbgPrint("[AC] IoCreateDevice failed, status %x", status);
         return status;
     }
-    DbgPrint("IoCreateDevice succeeded");
+    DbgPrint("[AC] IoCreateDevice succeeded");
 
     status = IoCreateSymbolicLink(&g_DeviceSymbolicLink, &g_DeviceName);
 
     if (!NT_SUCCESS(status)) {
-        DbgPrint("IoCreateSymbolicLink failed, status %x", status);
+        DbgPrint("[AC] IoCreateSymbolicLink failed, status %x", status);
 
         IoDeleteDevice(pDriverObject->DeviceObject);
         return status;
     }
-    DbgPrint("IoCreateSymbolicLink succeeded");
+    DbgPrint("[AC] IoCreateSymbolicLink succeeded");
 
 
     status = RegisterCallbacks();
     if (!NT_SUCCESS(status)) {
-        DbgPrint("RegisterCallbacks failed, status %x", status);
+        DbgPrint("[AC] RegisterCallbacks failed, status %x", status);
 
         IoDeleteDevice(pDriverObject->DeviceObject);
         IoDeleteSymbolicLink(&g_DeviceSymbolicLink);
         return status;
     }
-    DbgPrint("RegisterCallbacks succeeded");
+    DbgPrint("[AC] RegisterCallbacks succeeded");
 
-
-
-    DbgPrint("-----------------------");
-    DbgPrint("Driver Entry Succeeded.");
+    DbgPrint("[AC] Driver Entry Succeeded.");
     return STATUS_SUCCESS;
 }
 
 NTSTATUS DriverUnload(IN PDRIVER_OBJECT pDriverObject)
+/*
+This function is kind of obsolete since the driver wont unload when it's used in PnP...
+*/
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
 
@@ -173,13 +162,13 @@ NTSTATUS DriverUnload(IN PDRIVER_OBJECT pDriverObject)
 
     status = IoDeleteSymbolicLink(&g_DeviceSymbolicLink);
     if (!NT_SUCCESS(status)) {
-        DbgPrint("Failed to delete SymbolicLink, status %x", status);
+        DbgPrint("[AC] Failed to delete SymbolicLink, status %x", status);
     }
 
     if (pDriverObject->DeviceObject)
     {
         IoDeleteDevice(pDriverObject->DeviceObject);
-        DbgPrint("Deleted Device");
+        DbgPrint("[AC] Deleted Device");
     }
     DbgPrint("Stopped Driver");
 

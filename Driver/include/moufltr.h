@@ -2,10 +2,10 @@
 #include "common.h"
 #include <ntddmou.h>
 
-VOID MouseCallback(_In_    PDEVICE_OBJECT    DeviceObject,
-				   _In_    PMOUSE_INPUT_DATA InputDataStart,
-				   _In_    PMOUSE_INPUT_DATA InputDataEnd,
-				   _Inout_ PULONG            InputDataConsumed);
+VOID MouseCallback(PDEVICE_OBJECT    DeviceObject,
+				   PMOUSE_INPUT_DATA InputDataStart,
+				   PMOUSE_INPUT_DATA InputDataEnd,
+				   PULONG            InputDataConsumed);
 
 VOID ReportMouseClick(PMOUSE_INPUT_DATA p);
 

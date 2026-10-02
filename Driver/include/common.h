@@ -44,7 +44,6 @@ typedef struct _FDEVICE_EXTENSION {
 	CONNECT_DATA   UpperConnectData;
 } FDEVICE_EXTENSION, * PFDEVICE_EXTENSION;
 #endif
-extern PFDEVICE_EXTENSION g_FilterDeviceExtension;
 
 
 #define WHITELIST_SIZE 5
