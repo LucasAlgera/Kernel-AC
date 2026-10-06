@@ -8,7 +8,8 @@ CHAR g_Whitelist[WHITELIST_SIZE][MAX_PROCESS_NAME_LENGTH] =
 {
     "explorer.exe",
     "discord.exe",
-	"svchost.exe"
+	"svchost.exe",
+	"UserMode_AC.exe"
 };
 
 

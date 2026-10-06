@@ -45,7 +45,7 @@ int main()
     }
 
     HANDLE pHandle;
-    std::string procpath = "C:/Windows/system32/notepad.exe";
+    std::string procpath = "C:/Users/malware/Desktop/Release/game.exe";
     pHandle = CreateNewProcess(procpath);
     if (!pHandle)
     {
@@ -54,7 +54,7 @@ int main()
     }    
     DWORD PID = GetProcessId(pHandle);
 
-    CopyOwnFileTo("\\dllservice.dll", procpath);
+    CopyOwnFileTo("dllservice.dll", "C:/Users/malware/Desktop/Release/");
     InjectDLL(PID, "dllservice.dll");
 
 

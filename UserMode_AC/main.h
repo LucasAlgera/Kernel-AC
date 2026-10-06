@@ -28,14 +28,15 @@ HANDLE CreateNewProcess(std::string path)
 bool CopyOwnFileTo(const std::string& fn, const std::string& d)
 {
     char currentDir[MAX_PATH];
-
+    
     DWORD result = GetCurrentDirectoryA(MAX_PATH, currentDir);
     if (result == 0 || result >= MAX_PATH)
         return false;
 
     std::string filePath = std::string(currentDir) + "\\" + fn;
+    std::string newFilePath = d + fn;
 
-    return CopyFileA(filePath.c_str(), d.c_str(), FALSE) != FALSE;
+    return CopyFileA(filePath.c_str(), newFilePath.c_str(), FALSE) != FALSE;
 }
 
 bool InitializeDriver()
@@ -305,11 +306,13 @@ bool CreateServer()
 
 bool IsMouseClicked()
 {
+    std::cout << "connecting..";
     if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
         std::cout << "ConnectNamedPipe failed: " << GetLastError() << "\n";
         CloseHandle(hPipe);
         return false;
     }
+    std::cout << "connected!";
 
     char buf[BUF_SIZE];
     DWORD bytesRead;
