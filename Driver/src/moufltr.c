@@ -2,10 +2,14 @@
 
 #pragma alloc_text(NONPAGE, MouseCallback)
 
+#define LENIENCY_LIMIT		5	// How many times the SQ of the mouse coordinates can be the same
+#define SNAPSHOT_INTERVAL	5	// The interval between snapshots
+
+SnapshotManager g_SnapshotManager = { 0 };
 
 VOID MouseCallback(PDEVICE_OBJECT DeviceObject, PMOUSE_INPUT_DATA InputDataStart, PMOUSE_INPUT_DATA InputDataEnd, PULONG InputDataConsumed)
 /*
-https://learn.microsoft.com/en-us/previous-versions/ff542394(v=vs.85)
+https://learn.microsoft.com/en-us/previous-versions/ff542394(v=vs.85)/
 */
 {
     PFDEVICE_EXTENSION ext = (PFDEVICE_EXTENSION)DeviceObject->DeviceExtension;
@@ -18,6 +22,16 @@ https://learn.microsoft.com/en-us/previous-versions/ff542394(v=vs.85)
 		{
 			ReportMouseClick(p);
 		}
+
+		if (g_SnapshotManager.packetCount >= SNAPSHOT_INTERVAL)
+		{
+			g_SnapshotManager.packetCount = 0;
+
+			if (IsMovementSuspicous(p))
+				DbgPrint("[AC] LINEAR MOVEMENT!");
+		}
+
+		g_SnapshotManager.packetCount++;
     }
 
 	// TODO: 
@@ -42,6 +56,40 @@ VOID ReportMouseClick(PMOUSE_INPUT_DATA p)
     g_DriverExtention->MouseData.Time = CurrentTime;
 	DbgPrint("[AC] Hit a mouse callback!");
     return;
+}
+
+BOOLEAN IsMovementSuspicous(PMOUSE_INPUT_DATA p)
+/*
+Just tests if to movement is linear (for now?)
+*/
+{
+	if (p->LastX == 0 && p->LastY == 0)
+	{
+		g_SnapshotManager.counter = 0;
+		return FALSE;
+	}
+
+	LONG dy = p->LastY - g_SnapshotManager.prevY;
+	LONG dx = p->LastX - g_SnapshotManager.prevX;
+
+
+	BOOLEAN sus = FALSE;
+
+	if (dx == g_SnapshotManager.dx && dy == g_SnapshotManager.dy)
+	{
+		g_SnapshotManager.counter++;
+		if (g_SnapshotManager.counter >= LENIENCY_LIMIT)
+			sus = TRUE;
+	}
+	else
+	{
+		g_SnapshotManager.counter = 0;
+	}
+
+	g_SnapshotManager.prevX = p->LastX;
+	g_SnapshotManager.prevY = p->LastY;
+
+	return sus;
 }
 
 NTSTATUS PassIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
