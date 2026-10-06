@@ -14,6 +14,8 @@
 #define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 
+#define FEATURE_MOUSE_MONITORING
+
 int main()
 {
     if (!InitializeDriver())
@@ -45,7 +47,8 @@ int main()
     }
 
     HANDLE pHandle;
-    std::string procpath = "C:/Users/malware/Desktop/Release/game.exe";
+    //std::string procpath = "C:/Users/malware/Desktop/Release/game.exe";
+    std::string procpath = "C:/Windows/System32/notepad.exe";
     pHandle = CreateNewProcess(procpath);
     if (!pHandle)
     {
@@ -54,7 +57,7 @@ int main()
     }    
     DWORD PID = GetProcessId(pHandle);
 
-    CopyOwnFileTo("dllservice.dll", "C:/Users/malware/Desktop/Release/");
+    CopyOwnFileTo("dllservice.dll", "C:/Windows/System32/");
     InjectDLL(PID, "dllservice.dll");
 
 
@@ -94,6 +97,8 @@ int main()
         }
     }
 
+
+#ifdef FEATURE_MOUSE_MONITORING
     if (!CreateServer())
         return 0;
 
@@ -104,6 +109,8 @@ int main()
         std::getline(std::cin, input);
         if (input == "Q") break;
     }
+#endif // FEATURE_MOUSE_MONITORING
+
 
     std::string x;
     std::cin >> x;
