@@ -7,6 +7,16 @@
 
 HANDLE g_service = nullptr;
 
+typedef enum _SAFETY_CODE
+{
+    None,
+    DebuggerDetected,
+    VirtualEnvironment,
+    InjectionAttempt,
+    ManuallyMappedCode,
+    HashChanged
+} SAFETY_CODE;
+
 HANDLE CreateNewProcess(std::string path)
 {
     STARTUPINFOA si;

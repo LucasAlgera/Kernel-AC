@@ -14,3 +14,5 @@ NTSTATUS HandleProcessLaunch(IRP* Irp);
 NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp);
 
 NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp);
+
+NTSTATUS ReportCurrentStatus(DEVICE_OBJECT* DeviceObject, IRP* Irp);

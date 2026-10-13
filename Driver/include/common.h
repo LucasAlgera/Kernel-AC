@@ -17,6 +17,24 @@ typedef struct _HASH_STORAGE
 	uintptr_t offset;		// the offset to the .text section
 } HASH_STORAGE, * PHASH_STORAGE;
 
+typedef enum _SAFETY_CODE
+{
+	None,
+	DebuggerDetected,
+	VirtualEnvironment,
+	InjectionAttempt,
+	ManuallyMappedCode,
+	HashChanged, 
+	SuspicousMovement
+} SAFETY_CODE;
+
+typedef struct _SAFETY_STATUS
+{
+	SAFETY_CODE SafetyCode;
+	ULONG Severity; // ?
+
+} SAFETY_STATUS, * PSAFETY_STATUS;
+
 #ifndef _DRIVER_SETTINGS_DEFINED
 #define _DRIVER_SETTINGS_DEFINED
 typedef struct _DRIVER_SETTINGS
@@ -29,6 +47,7 @@ typedef struct _DRIVER_SETTINGS
 		ULONG ButtonFlags;
 		LARGE_INTEGER Time;
 	} MouseData;
+	PSAFETY_STATUS SafetyStatus;
 } DRIVER_SETTINGS, * PDRIVER_SETTINGS;
 #endif
 extern PDRIVER_SETTINGS g_DriverExtention;

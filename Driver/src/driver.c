@@ -5,6 +5,7 @@
 #include "common.h"
 #include "moufltr.h"
 
+#define ENABLE_KD_PROTECTION
 
 UNICODE_STRING g_DeviceName = RTL_CONSTANT_STRING(L"\\Device\\KernelAC");
 UNICODE_STRING g_DeviceSymbolicLink = RTL_CONSTANT_STRING(L"\\??\\KernelAC");
@@ -83,6 +84,18 @@ This function is called as the entry point of the driver, important things happe
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
     UNREFERENCED_PARAMETER(RegistryPath);
+
+#ifdef ENABLE_KD_PROTECTION
+    if (IsKdPresent())
+    {
+        if (!NT_SUCCESS(KdDisableDebugger()))
+        {
+            DbgPrint("Couldn't disable debugger!");
+            return status;
+        }
+        DbgPrint("Disabled debugger!");
+    }
+#endif // ENABLE_KD_PROTECTION
 
     // Make sure the filter driver passes along most incoming IRP's along 
     for (ULONG i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
@@ -173,4 +186,16 @@ This function is kind of obsolete since the driver wont unload when it's used in
     DbgPrint("Stopped Driver");
 
     return STATUS_SUCCESS;
+}
+
+BOOLEAN IsKdPresent()
+{
+    if (*KdDebuggerEnabled && !*KdDebuggerNotPresent) 
+        return TRUE;
+
+    // If KdDebuggerNotPresent is tampered with, this function refreshes by communicating with the host machine
+    if (!KdRefreshDebuggerNotPresent()) 
+        return TRUE;
+
+    return FALSE;
 }

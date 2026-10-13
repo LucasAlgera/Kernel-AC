@@ -3,6 +3,7 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 - walking process list 
 - scanning code mapping
 - handling process launching
+- reporting AC status
 */
 
 #include "io.h"
@@ -17,6 +18,7 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 #define IOCTL_VERIFY_SNAPSHOT_HASH				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_WALK_PROCESS_LIST 				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GET_CURRENT_STATUS				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20007, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define PROCESS_LINK_OFFSET 0x448 // for version 22H2
 #define MAX_PROCESSES		5000  // should be fine...
@@ -47,6 +49,7 @@ Used by:
 	{
 		PIO_STACK_LOCATION irpSp;
 		ULONG IOCTL_CODE = 0;
+		NTSTATUS status = STATUS_UNSUCCESSFUL;
 
 		UNREFERENCED_PARAMETER(DeviceObject);
 
@@ -59,28 +62,34 @@ Used by:
 			DbgPrint("[AC] Process Terminated");
 			break;
 		case IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH:
-			HandleProcessLaunch(Irp);
+			status = HandleProcessLaunch(Irp);
 			DbgPrint("[AC] Process Launched");
 			break;
 		case IOCTL_SNAPSHOT_HASH_TEXT_SECTION:
-			TakeHashSnapshot(DeviceObject, Irp);
+			status = TakeHashSnapshot(DeviceObject, Irp);
 			break;
 		case IOCTL_VERIFY_SNAPSHOT_HASH:
-			VerifyHashSnapshot(DeviceObject, Irp);
+			status = VerifyHashSnapshot(DeviceObject, Irp);
 			goto end;
 			break;
 		case IOCTL_WALK_PROCESS_LIST:
-			WalkProcessList(DeviceObject, Irp);
+			status = WalkProcessList(DeviceObject, Irp);
 			//goto end; TODO: implement IRP handling for process scanning.
 			break;
 		case IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE:
-			ScanManuallyMappedCode(DeviceObject, Irp);
+			status = ScanManuallyMappedCode(DeviceObject, Irp);
+			break;
+		case IOCTL_GET_CURRENT_STATUS: 
+			status = ReportCurrentStatus(DeviceObject, Irp);
+			goto end;
 			break;
 		}
 
-		Irp->IoStatus.Status = STATUS_SUCCESS;
+		Irp->IoStatus.Status = status;
 		Irp->IoStatus.Information = 0;
 		IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+		return status;
 	}
 	else
 	{
@@ -88,7 +97,7 @@ Used by:
 	}
 
 end:
-	return STATUS_SUCCESS;
+	return STATUS_UNSUCCESSFUL;
 }
 
 NTSTATUS InternalDispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
@@ -270,6 +279,32 @@ NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		if ((ULONG_PTR)baseAddress >= 0x7FFFFFFFFFFF) break; // user-space limit
 	}
 	KeUnstackDetachProcess(&apcState);
+
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS ReportCurrentStatus(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+{
+	UNREFERENCED_PARAMETER(DeviceObject);
+
+	SAFETY_STATUS status = *g_DriverExtention->SafetyStatus;
+	PIO_STACK_LOCATION ioStack = IoGetCurrentIrpStackLocation(Irp);
+	ULONG buffOutLength = ioStack->Parameters.DeviceIoControl.OutputBufferLength;
+	PVOID buffOut = Irp->AssociatedIrp.SystemBuffer;
+
+	if (buffOutLength < sizeof(status))
+	{
+		Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
+		Irp->IoStatus.Information = 0;
+		IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	RtlCopyMemory(buffOut, &status, sizeof(status));
+	Irp->IoStatus.Status = STATUS_SUCCESS;
+	Irp->IoStatus.Information = sizeof(status);
+	IoCompleteRequest(Irp, IO_NO_INCREMENT);
 
 	return STATUS_SUCCESS;
 }

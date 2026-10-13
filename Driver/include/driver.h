@@ -7,3 +7,5 @@ NTSTATUS DriverAddDevice(IN DRIVER_OBJECT* DriverObject, IN DEVICE_OBJECT* Physi
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject, IN PUNICODE_STRING theRegistryPath);
 
 NTSTATUS DriverUnload(IN PDRIVER_OBJECT pDiverObject);
+
+BOOLEAN IsKdPresent();
