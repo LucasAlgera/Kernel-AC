@@ -75,7 +75,8 @@ Just tests if to movement is linear (for now?)
 
 	BOOLEAN sus = FALSE;
 
-	if (dx == g_SnapshotManager.dx && dy == g_SnapshotManager.dy)
+	if (dx == g_SnapshotManager.dx && dy == g_SnapshotManager.dy 
+		&& (dx + dy) != 0)
 	{
 		g_SnapshotManager.counter++;
 		if (g_SnapshotManager.counter >= LENIENCY_LIMIT)
