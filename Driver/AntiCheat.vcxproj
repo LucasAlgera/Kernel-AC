@@ -124,12 +124,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\moufltr.c" />
+    <ClCompile Include="src\proc.c" />
     <ClInclude Include="include\common.h" />
     <ClCompile Include="src\callbacks.c" />
     <ClCompile Include="src\driver.c" />
     <ClCompile Include="src\hashing.c" />
     <ClCompile Include="src\io.c" />
     <ClInclude Include="include\moufltr.h" />
+    <ClInclude Include="include\proc.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\callbacks.h" />
