@@ -199,6 +199,8 @@ Hashes the code (.text) section and stores it in g_DriverExtention.
     if (!NT_SUCCESS(GetTextSectionFromMonitoredProcess(&code, &codeLength, offset)))
 	{
 		DbgPrint("[AC] Fail..");
+        ObDereferenceObject(process);
+
 		return STATUS_UNSUCCESSFUL;
 	}
 
@@ -226,6 +228,7 @@ Hashes the code (.text) section and stores it in g_DriverExtention.
 	KeUnstackDetachProcess(&ApcState); // go back to own address space
 	//if (code) ExFreePoolWithTag(code, 'edoc');
 
+    ObDereferenceObject(process);
 	return STATUS_SUCCESS;
 }
 
