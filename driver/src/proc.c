@@ -147,7 +147,8 @@ Try to get the address of the function by dynamically resolving it. If it's not 
 	return addr;
 }
 
-VOID ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId) {
+VOID ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId) 
+{
 
 	UNREFERENCED_PARAMETER(ThreadId);
 
@@ -159,15 +160,16 @@ VOID ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId) {
 	BOOLEAN bp1 = (dr7 & (1 << 2)) || (dr7 & (1 << 3));
 	BOOLEAN bp2 = (dr7 & (1 << 4)) || (dr7 & (1 << 5));
 	BOOLEAN bp3 = (dr7 & (1 << 6)) || (dr7 & (1 << 7));
-
 	if (bp0 || bp1 || bp2 || bp3) 
 	{
-		KdPrint(("[AC] HWBP detected on Thread %p!\n", ThreadId));
+		DbgPrint(("[AC] HWBP detected on Thread %p!\n", ThreadId));
 		// (PVOID)Context->Dr0-7 to view the address.
 
 		// TODO: Update status/reporting struct here
 		// TODO: Maybe disable the HWBPs?
+		return;
 	}
+	DbgPrint("[AC] No HWBP detected");
 }
 
 VOID InspectThreadContext(HANDLE ThreadId) 
@@ -189,12 +191,13 @@ VOID InspectThreadContext(HANDLE ThreadId)
 	}
 
 	pContext->ContextFlags = CONTEXT_DEBUG_REGISTERS; // saves some computing
-
+	
 	status = PsGetThreadContext(pEthread, pContext, KernelMode);
 	if (NT_SUCCESS(status)) 
 	{
 		ParseDebugRegisters(pContext, ThreadId);
 	}
+	DbgPrint("[AC] Status: 0x%08X\n", status);
 
 	ExFreePoolWithTag(pContext, 'Txtc');
 	ObDereferenceObject(pEthread); 
@@ -211,7 +214,7 @@ NTSTATUS ScanThreadsForHWBP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	HANDLE PID = (HANDLE)(ULONG_PTR)g_DriverExtention->PID;
 
 	status = ZwQuerySystemInformation(SystemProcessInformation, NULL, 0, &size);
-	if (!NT_SUCCESS(status)) return status;
+	if (!NT_SUCCESS(status) && status != STATUS_INFO_LENGTH_MISMATCH) return status;
 
 	size += 0x1000; // some padding
 	if (size == 0) return STATUS_UNSUCCESSFUL;
