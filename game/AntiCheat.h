@@ -21,7 +21,7 @@ void NotifyMouspress()
 
 	if (mouseClickedFunc())
 	{
-		std::cout << "notification successful!";
+		//std::cout << "notification successful!";
 		FreeLibrary(hModule);
 
 

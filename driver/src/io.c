@@ -23,6 +23,7 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 #define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_GET_CURRENT_STATUS				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20007, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_CHECK_HWBP						CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20008, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20009, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 /*
@@ -74,6 +75,10 @@ Used by:
 			break;
 		case IOCTL_CHECK_HWBP:
 			status = ScanThreadsForHWBP(DeviceObject, Irp);
+			break;
+		case IOCTL_GAME_REGISTERED_CLICK:
+			HandleGameMouseClick();
+			status = STATUS_SUCCESS;
 			break;
 		}
 

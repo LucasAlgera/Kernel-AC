@@ -14,6 +14,7 @@
 #define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_GET_CURRENT_STATUS				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20007, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_CHECK_HWBP						CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20008, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20009, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 
 #define FEATURE_MOUSE_MONITORING
@@ -49,8 +50,8 @@ int main()
     }
 
     HANDLE pHandle;
-    //std::string procpath = "C:/Users/malware/Desktop/Release/game.exe";
-    std::string procpath = "C:/Windows/System32/notepad.exe";
+    std::string procpath = "C:/Users/malware/Desktop/Release/game.exe";
+    //std::string procpath = "C:/Windows/System32/notepad.exe";
     pHandle = CreateNewProcess(procpath);
     if (!pHandle)
     {
@@ -106,11 +107,12 @@ int main()
         return 0;
 
     std::string input;
-    while (true) {
-        IsMouseClicked();
-
-        std::getline(std::cin, input);
-        if (input == "Q") break;
+    while (true) 
+    {
+        if (IsMouseClicked())
+        {
+            if (hDriver)DeviceIoControl(hDriver, IOCTL_GAME_REGISTERED_CLICK, NULL, NULL, NULL, NULL, NULL, NULL);
+        }
     }
 #endif // FEATURE_MOUSE_MONITORING
 

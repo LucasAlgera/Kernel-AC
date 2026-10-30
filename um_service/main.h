@@ -316,27 +316,19 @@ bool CreateServer()
 
 bool IsMouseClicked()
 {
-    std::cout << "connecting..";
     if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
-        std::cout << "ConnectNamedPipe failed: " << GetLastError() << "\n";
-        CloseHandle(hPipe);
         return false;
     }
-    std::cout << "connected!";
 
     char buf[BUF_SIZE];
     DWORD bytesRead;
-    if (ReadFile(hPipe, buf, BUF_SIZE, &bytesRead, NULL) && bytesRead > 0) 
-    {
-        if (bytesRead == 13 && memcmp(buf, "MOUSE_CLICKED", 13) == 0) 
-        { 
-            std::cout << "Mouse clicked!";
-            return true;
-        }
-    }
+    bool clicked = false;
 
-    CloseHandle(hPipe);
-    return false;
+    if (ReadFile(hPipe, buf, BUF_SIZE, &bytesRead, NULL) && bytesRead == 13)
+        clicked = memcmp(buf, "MOUSE_CLICKED", 13) == 0;
+
+    DisconnectNamedPipe(hPipe);
+    return clicked;
 }
 
 bool InjectDLL(DWORD PID, const char* dllName)

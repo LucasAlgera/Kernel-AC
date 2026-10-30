@@ -50,13 +50,29 @@ https://learn.microsoft.com/en-us/previous-versions/ff542394(v=vs.85)/
 VOID ReportMouseClick(PMOUSE_INPUT_DATA p)
 {
     LARGE_INTEGER CurrentTime;
-    KeQuerySystemTime(&CurrentTime);
+	KeQuerySystemTimePrecise(&CurrentTime);
 
     g_DriverExtention->MouseData.ButtonFlags = p->ButtonFlags;
     g_DriverExtention->MouseData.Time = CurrentTime;
 	DbgPrint("[AC] Hit a mouse callback!");
     return;
 }
+
+VOID HandleGameMouseClick()
+{
+	LARGE_INTEGER CurrentTime;
+
+	// KeQuerySystemTime returns times in blocks which are not accurate enough..
+	KeQuerySystemTimePrecise(&CurrentTime);
+
+	LONGLONG diff = CurrentTime.QuadPart - g_DriverExtention->MouseData.Time.QuadPart;
+
+	if (diff >= 1'000'000)
+	{
+		// TODO: increment flag count
+	}
+}
+
 
 BOOLEAN IsMovementSuspicous(PMOUSE_INPUT_DATA p)
 /*

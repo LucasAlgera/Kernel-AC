@@ -9,6 +9,8 @@ VOID MouseCallback(PDEVICE_OBJECT    DeviceObject,
 
 VOID ReportMouseClick(PMOUSE_INPUT_DATA p);
 
+VOID HandleGameMouseClick();
+
 BOOLEAN IsMovementSuspicous(PMOUSE_INPUT_DATA p);
 
 NTSTATUS PassIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp);
