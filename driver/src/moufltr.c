@@ -4,8 +4,11 @@
 
 #define LENIENCY_LIMIT		5	// How many times the SQ of the mouse coordinates can be the same
 #define SNAPSHOT_INTERVAL	5	// The interval between snapshots
+#define ACCELERATION_LIMIT  50
+#define MAX_LATENCY         10'000 // NS
 
 SnapshotManager g_SnapshotManager = { 0 };
+MFReport g_MFReport = { 0 };
 
 VOID MouseCallback(PDEVICE_OBJECT DeviceObject, PMOUSE_INPUT_DATA InputDataStart, PMOUSE_INPUT_DATA InputDataEnd, PULONG InputDataConsumed)
 /*
@@ -23,15 +26,10 @@ https://learn.microsoft.com/en-us/previous-versions/ff542394(v=vs.85)/
 			ReportMouseClick(p);
 		}
 
-		if (g_SnapshotManager.packetCount >= SNAPSHOT_INTERVAL)
-		{
-			g_SnapshotManager.packetCount = 0;
+		StorePacketData(p);
 
-			if (IsMovementSuspicous(p))
-				DbgPrint("[AC] LINEAR MOVEMENT!");
-		}
-
-		g_SnapshotManager.packetCount++;
+		MonitorLinearity();
+		MonitorAcceleration();
     }
 
 	// TODO: 
@@ -52,10 +50,32 @@ VOID ReportMouseClick(PMOUSE_INPUT_DATA p)
     LARGE_INTEGER CurrentTime;
 	KeQuerySystemTimePrecise(&CurrentTime);
 
+	MonitorPressInterval(g_DriverExtention->MouseData.Time, CurrentTime);
+
     g_DriverExtention->MouseData.ButtonFlags = p->ButtonFlags;
     g_DriverExtention->MouseData.Time = CurrentTime;
 	DbgPrint("[AC] Hit a mouse callback!");
     return;
+}
+
+VOID MonitorPressInterval(LARGE_INTEGER pTime, LARGE_INTEGER cTime)
+{
+	LONGLONG diff = cTime.QuadPart - pTime.QuadPart;
+	LONG intervaldiff = (LONG)(g_SnapshotManager.mousepressInterval - diff);
+
+	if (intervaldiff < 0)
+		intervaldiff *= -1;
+
+	if (intervaldiff <= MAX_LATENCY)
+	{
+		g_SnapshotManager.mousepressCounter++;
+	}
+
+	if (g_SnapshotManager.mousepressCounter >= LENIENCY_LIMIT)
+	{
+		g_MFReport.flaggedMousePress = TRUE;
+		g_SnapshotManager.mousepressCounter = 0;
+	}
 }
 
 VOID HandleGameMouseClick()
@@ -67,46 +87,80 @@ VOID HandleGameMouseClick()
 
 	LONGLONG diff = CurrentTime.QuadPart - g_DriverExtention->MouseData.Time.QuadPart;
 
+	DbgPrint("NS difference: %I64d\n", diff);
+
 	if (diff >= 1'000'000)
 	{
 		// TODO: increment flag count
 	}
 }
 
+VOID StorePacketData(PMOUSE_INPUT_DATA p)
+{
+	g_SnapshotManager.pdx = g_SnapshotManager.dx;
+	g_SnapshotManager.pdy = g_SnapshotManager.dy;
 
-BOOLEAN IsMovementSuspicous(PMOUSE_INPUT_DATA p)
+	if (p->Flags & MOUSE_MOVE_ABSOLUTE)
+	{
+		g_SnapshotManager.dx = p->LastX - g_SnapshotManager.prevX;
+		g_SnapshotManager.dy = p->LastY - g_SnapshotManager.prevY;
+	}
+	if (p->Flags & MOUSE_MOVE_RELATIVE)
+	{
+		g_SnapshotManager.dx = p->LastX;
+		g_SnapshotManager.dy = p->LastY;
+	}
+
+	g_SnapshotManager.prevX = g_SnapshotManager.lastX;
+	g_SnapshotManager.prevY = g_SnapshotManager.lastY;
+
+	g_SnapshotManager.lastX = p->LastX;
+	g_SnapshotManager.lastY = p->LastY;
+}
+
+VOID MonitorLinearity()
 /*
 Just tests if to movement is linear (for now?)
 */
 {
-	if (p->LastX == 0 && p->LastY == 0)
+	LONG dx = g_SnapshotManager.dx;
+	LONG dy = g_SnapshotManager.dy;
+	LONG pdx = g_SnapshotManager.pdx;
+	LONG pdy = g_SnapshotManager.pdy;
+
+	if (dx == 0 && dy == 0)
 	{
-		g_SnapshotManager.counter = 0;
-		return FALSE;
+		g_SnapshotManager.movementCounter = 0;
+		return ;
 	}
-
-	LONG dy = p->LastY - g_SnapshotManager.prevY;
-	LONG dx = p->LastX - g_SnapshotManager.prevX;
-
 
 	BOOLEAN sus = FALSE;
 
-	if (dx == g_SnapshotManager.dx && dy == g_SnapshotManager.dy 
-		&& (dx + dy) != 0)
+	if (dx == pdx && dy == pdy) 
 	{
-		g_SnapshotManager.counter++;
-		if (g_SnapshotManager.counter >= LENIENCY_LIMIT)
+		g_SnapshotManager.movementCounter++;
+
+		if (g_SnapshotManager.movementCounter >= LENIENCY_LIMIT)
 			sus = TRUE;
 	}
 	else
 	{
-		g_SnapshotManager.counter = 0;
+		g_SnapshotManager.movementCounter = 0;
 	}
 
-	g_SnapshotManager.prevX = p->LastX;
-	g_SnapshotManager.prevY = p->LastY;
+	if (sus)
+		g_MFReport.flaggedLinearMovement = TRUE;
+}
 
-	return sus;
+VOID MonitorAcceleration()
+{
+	LONG ax = g_SnapshotManager.dx - g_SnapshotManager.pdx;
+	LONG ay = g_SnapshotManager.dy - g_SnapshotManager.pdy;
+
+	if (ax >= ACCELERATION_LIMIT || ay >= ACCELERATION_LIMIT)
+	{
+		g_MFReport.flaggedAcceleration = TRUE;
+	}
 }
 
 NTSTATUS PassIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
@@ -179,4 +233,9 @@ FALSE: filter
 		return TRUE;
 	else
 		return FALSE;
+}
+
+MFReport GetMFReport()
+{
+	return g_MFReport;
 }
