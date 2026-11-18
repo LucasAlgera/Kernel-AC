@@ -29,6 +29,14 @@ NTSTATUS PassPowerIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp);
 
 BOOLEAN IsACDevice(DEVICE_OBJECT* DeviceObject);
 
+typedef struct _MFReport
+{
+	BOOLEAN flaggedAcceleration;
+	BOOLEAN flaggedLinearMovement;
+	BOOLEAN flaggedMousePress;
+	// ...
+} MFReport, * PMFReport;
+
 MFReport GetMFReport();
 
 typedef struct _SnapshotManager
@@ -49,11 +57,3 @@ typedef struct _SnapshotManager
 	LONG mousepressCounter;
 
 } SnapshotManager, *PSnapshotManager;
-
-typedef struct _MFReport
-{
-	BOOLEAN flaggedAcceleration;
-	BOOLEAN flaggedLinearMovement;
-	BOOLEAN flaggedMousePress;
-	// ...
-} MFReport, *PMFReport;
