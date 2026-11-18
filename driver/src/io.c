@@ -11,6 +11,7 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 #include "hashing.h"
 #include "moufltr.h"
 #include "proc.h"
+#include "hid.h"
 #include <kbdmou.h> 
 
 #define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS) // should not be any access!
@@ -24,6 +25,7 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 #define IOCTL_GET_CURRENT_STATUS				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20007, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_CHECK_HWBP						CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20008, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20009, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_ENUMERATE_USB_HUB					CTL_CODE(FILE_DEVICE_UNKNOWN, 0x200010, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 /*
@@ -79,6 +81,9 @@ Used by:
 		case IOCTL_GAME_REGISTERED_CLICK:
 			HandleGameMouseClick();
 			status = STATUS_SUCCESS;
+			break;
+		case IOCTL_ENUMERATE_USB_HUB:
+			status = EnumerateUSBHub();
 			break;
 		}
 
