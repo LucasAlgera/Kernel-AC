@@ -29,6 +29,8 @@ NTSTATUS PassPowerIRP(DEVICE_OBJECT* DeviceObject, IRP* Irp);
 
 BOOLEAN IsACDevice(DEVICE_OBJECT* DeviceObject);
 
+MFReport GetMFReport();
+
 typedef struct _SnapshotManager
 {
 	// Current packet info
