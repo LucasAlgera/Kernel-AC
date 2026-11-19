@@ -1,13 +1,25 @@
 #pragma once
 #include "common.h"
 
+#pragma warning(push)
+#pragma warning(disable: 4201)
+
+#define MAX_FW_STRING 256
+#define KEY_COUNT     2
+
 VOID RegisterHUBCallbacks();
 
 NTSTATUS EnumerateUSBHub();
 
 typedef struct _FirmwareData
 {
-	LONG a;
+    union {
+        WCHAR Fields[KEY_COUNT][MAX_FW_STRING];
+        struct {
+            WCHAR Manufacturer[MAX_FW_STRING];
+            WCHAR HardwareIds[MAX_FW_STRING];
+        };
+    };
 } FirmwareData, *PFirmwareData;
 
 typedef struct _HIDResults
