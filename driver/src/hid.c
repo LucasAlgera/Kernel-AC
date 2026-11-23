@@ -23,6 +23,8 @@ const GUID* g_GUIDEnumerationList[GUID_COUNT] =
     &GUID_DEVINTERFACE_MOUSE
 };
 
+
+// I have to manually declare these here, otherwise I can't use them in g_PropKeys..
 static const DEVPROPKEY g_DevPropKey_Manufacturer = {
     { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 13
 };
@@ -38,6 +40,8 @@ const DEVPROPKEY* g_PropKeys[KEY_COUNT] =
 
 NTSTATUS EnumerateUSBHub()
 {
+    PAGED_CODE();
+
     PZZWSTR symbolicLinkList = NULL;
     NTSTATUS status = STATUS_UNSUCCESSFUL;
 
@@ -60,28 +64,31 @@ NTSTATUS EnumerateUSBHub()
             RtlInitUnicodeString(&ObjectName, currentLink);
 
             status = IoGetDeviceObjectPointer(&ObjectName, FILE_READ_ATTRIBUTES, &pfo, &pdo);
-            PDEVICE_OBJECT actualPdo = IoGetDeviceAttachmentBaseRef(pdo); //??
-
-            if (NT_SUCCESS(status) && pdo != NULL)
+            if (!NT_SUCCESS(status) || pdo == NULL)
             {
-                PFirmwareData fwdata;
+                continue;
+            }
 
-                fwdata = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(FirmwareData), 'tdwF');
-                if (fwdata == NULL) continue;
-
-                status = RetrieveFirmware(actualPdo, fwdata);
+            PDEVICE_OBJECT actualPdo = IoGetDeviceAttachmentBaseRef(pdo);
+            if (actualPdo == NULL)
+            {
                 ObDereferenceObject(pfo);
-                ObDereferenceObject(actualPdo);
+                continue;
+            }
 
-                if (!NT_SUCCESS(status))
+            PFirmwareData fwdata = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(FirmwareData), 'tdwF');
+            if (fwdata != NULL)
+            {
+                status = RetrieveFirmware(actualPdo, fwdata);
+                if (NT_SUCCESS(status))
                 {
-                    ExFreePoolWithTag(fwdata, 'tdwF');
-                    continue;
+                    AnalyzeFirmware(fwdata);
                 }
-
-                AnalyzeFirmware(fwdata);
                 ExFreePoolWithTag(fwdata, 'tdwF');
             }
+
+            ObDereferenceObject(actualPdo);
+            ObDereferenceObject(pfo);
         }
 
         ExFreePool(symbolicLinkList);
@@ -143,16 +150,14 @@ NTSTATUS RetrieveFirmware(_In_ PDEVICE_OBJECT pdo, _Out_ PFirmwareData fwdata)
             }
         }
     }
-
-    DbgPrint("[AC] scanned a device!\n");
     return status;
 }
 
 VOID AnalyzeFirmware(_In_ PFirmwareData fwdata)
 {
     UNREFERENCED_PARAMETER(fwdata);
-    //DbgPrint("[AC] Manufacturer:  %ws\n", fwdata->Manufacturer);
-    //DbgPrint("[AC] HardwareIds:  %ws\n", fwdata->HardwareIds);
+    DbgPrint("[AC] Manufacturer:  %ws\n", fwdata->Manufacturer);
+    DbgPrint("[AC] HardwareIds:  %ws\n", fwdata->HardwareIds);
     return;
 }
 
