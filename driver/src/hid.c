@@ -228,7 +228,7 @@ BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer)
 
     for (int i = 0; i < BLOCKLIST_SIZE; i++)
     {
-        if (RtlEqualUnicodeString(&g_Blacklist[i], &strBuffer, FALSE))
+        if (RtlEqualUnicodeString(&g_Blacklist[i], &strBuffer, TRUE))
         {
             return TRUE;
         }
