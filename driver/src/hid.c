@@ -1,16 +1,44 @@
 #include "hid.h"
 
 #define GUID_COUNT 4
-#define BLOCKLIST_SIZE 1
+#define MANUFACTURER_SIZE 6
+#define PRODUCT_SIZE 5
+#define SERIALNUMBER_SIZE 8
 
 // can't include both winioctl.h and usbioctl.h so had to manually include this GUID..
 DEFINE_GUID(GUID_DEVINTERFACE_COMPORT, 0X86E0D1E0L, 0X8089, 0X11D0, 0X9C, 0XE4, 0X08, 0X00, 0X3E, 0X30, 0X1F, 0X73);
 
 HIDResults g_HIDResults = { 0 };
 
-const PCWSTR g_Blacklist[BLOCKLIST_SIZE] =
+const PCWSTR g_BlockedManufacturer[MANUFACTURER_SIZE] =
 {
     L"Cheat",
+    L"SparkFun", 
+    L"Raspberry Pi"
+    L"Espressif"
+    L"TinyUSB"
+    L"Teensyduino"
+};
+
+const PCWSTR g_BlockedProduct[PRODUCT_SIZE] =
+{
+    L"Arduino Leonardo",
+    L"SparkFun Pro Micro",
+    L"Pico"
+    L"TinyUSB Device"
+    L"ESP32-S3"
+};
+
+const PCWSTR g_BlockedSerialnumber[SERIALNUMBER_SIZE] =
+{
+    L"",
+    L"123456",
+    L"1234567"
+    L"12345678"
+    L"123456789"
+    L"1234567890"
+    L"fedcba9876543210"
+    L"0123456789abcdef"
 };
 
 VOID RegisterHUBCallbacks()
@@ -112,20 +140,28 @@ NTSTATUS EnumerateUsbHub()
             WCHAR serialnumber[MAX_FW_STRING] = { 0 };
 
             if (connInfo.DeviceDescriptor.iManufacturer)
+            {
                 GetStringDescriptorFromHub(pdo, i, connInfo.DeviceDescriptor.iManufacturer,
                     manufacturer, sizeof(manufacturer));
+                AnalyzeFirmwareString(manufacturer, FW_Manufacturer);
+            }
 
             if (connInfo.DeviceDescriptor.iProduct)
+            {
                 GetStringDescriptorFromHub(pdo, i, connInfo.DeviceDescriptor.iProduct,
                     product, sizeof(product));
-
+                AnalyzeFirmwareString(product, FW_Product);
+            }
+            
             if (connInfo.DeviceDescriptor.iSerialNumber)
+            {
                 GetStringDescriptorFromHub(pdo, i, connInfo.DeviceDescriptor.iSerialNumber,
                     serialnumber, sizeof(serialnumber));
-
-            if (AnalyzeFirmwareString(manufacturer))
+                AnalyzeFirmwareString(serialnumber, FW_Serialnumber);
+            }
+            
+            if (g_HIDResults.detectedFirmware)
             {
-                g_HIDResults.detectedFirmware = TRUE;
                 DbgPrint("[AC] Suspicous firmware entry \n");
             }
         }
@@ -221,16 +257,42 @@ NTSTATUS SendUsbIRP(
     return status;
 }
 
-BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer)
+BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType)
 {
-    for (int i = 0; i < BLOCKLIST_SIZE; i++)
+    switch (fwType)
     {
-        if (_wcsicmp(buffer, g_Blacklist[i]) != NULL) // case-insensitive
+    case FW_Manufacturer:
+        for (int i = 0; i < MANUFACTURER_SIZE; i++)
         {
-            g_HIDResults.detectedFirmware = TRUE;
-             return TRUE;
+            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) != NULL)
+            {
+                g_HIDResults.detectedFirmware = TRUE;
+                return TRUE;
+            }
         }
+        break;
+    case FW_Product:
+        for (int i = 0; i < PRODUCT_SIZE; i++)
+        {
+            if (_wcsicmp(buffer, g_BlockedProduct[i]) != NULL)
+            {
+                g_HIDResults.detectedFirmware = TRUE;
+                return TRUE;
+            }
+        }
+        break;
+    case FW_Serialnumber:
+        for (int i = 0; i < SERIALNUMBER_SIZE; i++)
+        {
+            if (_wcsicmp(buffer, g_BlockedSerialnumber[i]) != NULL)
+            {
+                g_HIDResults.detectedFirmware = TRUE;
+                return TRUE;
+            }
+        }
+        break;
     }
+
     return FALSE;
 }
 

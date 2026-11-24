@@ -9,6 +9,12 @@
 #define MAX_FW_STRING 256
 #define KEY_COUNT     2
 
+typedef enum _FirmwareTypes {
+    FW_Manufacturer,
+    FW_Product,
+    FW_Serialnumber
+} FirmwareTypes;
+
 typedef struct _FirmwareData
 {
     union {
@@ -45,6 +51,6 @@ NTSTATUS SendUsbIRP(
     _Out_ PVOID outputBuffer,
     _Out_ ULONG outputSize);
 
-BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer);
+BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType);
 
 HIDResults GetHIDResults();
