@@ -1,15 +1,13 @@
 #pragma once
 #include "common.h"
+#include <initguid.h>
+#include <usbioctl.h>
 
 #pragma warning(push)
-#pragma warning(disable: 4201)
+#pragma warning(disable: 4201) // for unnamed structs
 
 #define MAX_FW_STRING 256
 #define KEY_COUNT     2
-
-VOID RegisterHUBCallbacks();
-
-NTSTATUS EnumerateUSBHub();
 
 typedef struct _FirmwareData
 {
@@ -20,15 +18,32 @@ typedef struct _FirmwareData
             WCHAR HardwareIds[MAX_FW_STRING];
         };
     };
-} FirmwareData, *PFirmwareData;
+} FirmwareData, * PFirmwareData;
 
 typedef struct _HIDResults
 {
-	BOOLEAN detection;
-} HIDResults, *PHIDResults;
+    BOOLEAN detection;
+} HIDResults, * PHIDResults;
 
-NTSTATUS RetrieveFirmware(_In_ PDEVICE_OBJECT pdo, _Out_ PFirmwareData fwdata);
+VOID RegisterHUBCallbacks();
 
-VOID AnalyzeFirmware(_In_ PFirmwareData fwdata);
+NTSTATUS EnumerateUsbHub();
+
+NTSTATUS GetStringDescriptorFromHub(
+    _In_ PDEVICE_OBJECT hubPdo,
+    _In_ ULONG connectionIndex,
+    _In_ UCHAR structIdx,
+    _Out_ PWCHAR buffer,
+    _In_ ULONG bufferLen);
+
+NTSTATUS SendUsbIRP(
+    _In_ PDEVICE_OBJECT pdo,
+    _In_ ULONG ioControlCode,
+    _In_ PVOID inputBuffer,
+    _In_ ULONG inputSize,
+    _Out_ PVOID outputBuffer,
+    _Out_ ULONG outputSize);
+
+BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer);
 
 HIDResults GetHIDResults();

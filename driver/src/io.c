@@ -83,7 +83,7 @@ Used by:
 			status = STATUS_SUCCESS;
 			break;
 		case IOCTL_ENUMERATE_USB_HUB:
-			status = EnumerateUSBHub();
+			status = EnumerateUsbHub();
 			break;
 		}
 
