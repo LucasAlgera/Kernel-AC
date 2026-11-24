@@ -8,9 +8,9 @@ DEFINE_GUID(GUID_DEVINTERFACE_COMPORT, 0X86E0D1E0L, 0X8089, 0X11D0, 0X9C, 0XE4, 
 
 HIDResults g_HIDResults = { 0 };
 
-const UNICODE_STRING g_Blacklist[BLOCKLIST_SIZE] =
+const PCWSTR g_Blacklist[BLOCKLIST_SIZE] =
 {
-    RTL_CONSTANT_STRING(L"Cheat"),
+    L"Cheat",
 };
 
 VOID RegisterHUBCallbacks()
@@ -223,14 +223,12 @@ NTSTATUS SendUsbIRP(
 
 BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer)
 {
-    UNICODE_STRING strBuffer;
-    RtlInitUnicodeString(&strBuffer, buffer);
-
     for (int i = 0; i < BLOCKLIST_SIZE; i++)
     {
-        if (RtlEqualUnicodeString(&g_Blacklist[i], &strBuffer, TRUE))
+        if (_wcsicmp(buffer, g_Blacklist[i]) != NULL) // case-insensitive
         {
-            return TRUE;
+            g_HIDResults.detectedFirmware = TRUE;
+             return TRUE;
         }
     }
     return FALSE;
