@@ -2,10 +2,10 @@
 
 #pragma alloc_text(NONPAGE, MouseCallback)
 
-#define LENIENCY_LIMIT		5	// How many times the SQ of the mouse coordinates can be the same
-#define SNAPSHOT_INTERVAL	5	// The interval between snapshots
+#define LENIENCY_LIMIT		5		// How many times the SQ of the mouse coordinates can be the same
+#define SNAPSHOT_INTERVAL	5		// The interval between snapshots
 #define ACCELERATION_LIMIT  50
-#define MAX_LATENCY         10'000 // NS
+#define MAX_LATENCY         10'000	// NS
 
 SnapshotManager g_SnapshotManager = { 0 };
 MFReport g_MFReport = { 0 };
@@ -105,7 +105,7 @@ VOID StorePacketData(PMOUSE_INPUT_DATA p)
 		g_SnapshotManager.dx = p->LastX - g_SnapshotManager.prevX;
 		g_SnapshotManager.dy = p->LastY - g_SnapshotManager.prevY;
 	}
-	if (p->Flags & MOUSE_MOVE_RELATIVE)
+	else
 	{
 		g_SnapshotManager.dx = p->LastX;
 		g_SnapshotManager.dy = p->LastY;
@@ -157,8 +157,12 @@ VOID MonitorAcceleration()
 	LONG ax = g_SnapshotManager.dx - g_SnapshotManager.pdx;
 	LONG ay = g_SnapshotManager.dy - g_SnapshotManager.pdy;
 
+	if (ax < 0) ax = -ax;
+	if (ay < 0) ay = -ay;
+
 	if (ax >= ACCELERATION_LIMIT || ay >= ACCELERATION_LIMIT)
 	{
+		DbgPrint("[AC] too fast! x: %ld | y: %ld\n", ax, ay);
 		g_MFReport.flaggedAcceleration = TRUE;
 	}
 }
