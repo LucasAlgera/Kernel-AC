@@ -22,7 +22,8 @@ typedef struct _FirmwareData
 
 typedef struct _HIDResults
 {
-    BOOLEAN detection;
+    BOOLEAN detectedFirmware;
+    BOOLEAN detectedComPort;
 } HIDResults, * PHIDResults;
 
 VOID RegisterHUBCallbacks();

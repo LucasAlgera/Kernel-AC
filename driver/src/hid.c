@@ -3,6 +3,9 @@
 #define GUID_COUNT 4
 #define BLOCKLIST_SIZE 1
 
+// can't include both winioctl.h and usbioctl.h so had to manually include this GUID..
+DEFINE_GUID(GUID_DEVINTERFACE_COMPORT, 0X86E0D1E0L, 0X8089, 0X11D0, 0X9C, 0XE4, 0X08, 0X00, 0X3E, 0X30, 0X1F, 0X73);
+
 HIDResults g_HIDResults = { 0 };
 
 const UNICODE_STRING g_Blacklist[BLOCKLIST_SIZE] =
@@ -16,6 +19,47 @@ VOID RegisterHUBCallbacks()
     return;
 }
 
+NTSTATUS ScanComPorts()
+{
+    PAGED_CODE();
+
+    PZZWSTR symbolicLinkList = NULL;
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+    status = IoGetDeviceInterfaces(&GUID_DEVINTERFACE_COMPORT, NULL, 0, &symbolicLinkList);
+
+    if (!NT_SUCCESS(status) || symbolicLinkList == NULL) return status;
+
+    for (PWSTR currentLink = symbolicLinkList; *currentLink != L'\0'; currentLink += wcslen(currentLink) + 1)
+    {
+        UNICODE_STRING portName;
+        OBJECT_ATTRIBUTES objAttr;
+        IO_STATUS_BLOCK ioStatus;
+        HANDLE hPort = NULL;
+
+        RtlInitUnicodeString(&portName, currentLink);
+
+        InitializeObjectAttributes(&objAttr, &portName, 
+            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+
+        status = ZwCreateFile(&hPort, GENERIC_READ | GENERIC_WRITE, &objAttr, &ioStatus, 
+            NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_OPEN, FILE_NON_DIRECTORY_FILE, NULL, 0);
+
+        if (status == STATUS_ACCESS_DENIED || status == STATUS_SHARING_VIOLATION)
+        {
+            g_HIDResults.detectedComPort = TRUE;
+        }
+        if (hPort)
+        {
+            ZwClose(hPort);
+        }
+    }
+
+    ExFreePool(symbolicLinkList);
+
+    return STATUS_SUCCESS;
+}
+
 NTSTATUS EnumerateUsbHub()
 /*
 - Goes through all USB hubs and enumerates through every open usb connection. 
@@ -26,10 +70,8 @@ NTSTATUS EnumerateUsbHub()
 
     PZZWSTR symbolicLinkList = NULL;
     NTSTATUS status = STATUS_UNSUCCESSFUL;
-
-    const GUID* currentGUID = &GUID_DEVINTERFACE_USB_HUB;
  
-    status = IoGetDeviceInterfaces(currentGUID, NULL, 0, &symbolicLinkList);
+    status = IoGetDeviceInterfaces(&GUID_DEVINTERFACE_USB_HUB, NULL, 0, &symbolicLinkList);
  
     if (!NT_SUCCESS(status) || symbolicLinkList == NULL) return status;
     
@@ -83,7 +125,7 @@ NTSTATUS EnumerateUsbHub()
 
             if (AnalyzeFirmwareString(manufacturer))
             {
-                g_HIDResults.detection = TRUE;
+                g_HIDResults.detectedFirmware = TRUE;
                 DbgPrint("[AC] Suspicous firmware entry \n");
             }
         }
