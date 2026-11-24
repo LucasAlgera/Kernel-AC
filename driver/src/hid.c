@@ -1,3 +1,9 @@
+/*
+Functions in this file handle everything related to USB/HID detection. 
+Normally the now hardcoded blocklists would either be encrypted in memory or handled on the server.
+(For now) I just store them here..
+*/
+
 #include "hid.h"
 
 #define GUID_COUNT 4
@@ -10,13 +16,16 @@ DEFINE_GUID(GUID_DEVINTERFACE_COMPORT, 0X86E0D1E0L, 0X8089, 0X11D0, 0X9C, 0XE4, 
 
 HIDResults g_HIDResults = { 0 };
 
+
+// These blocklists are known to be used in cheats, these results should not be weighed extremely harsly. 
+// But they could indicate something..
 const PCWSTR g_BlockedManufacturer[MANUFACTURER_SIZE] =
 {
     L"Cheat",
     L"SparkFun", 
-    L"Raspberry Pi"
-    L"Espressif"
-    L"TinyUSB"
+    L"Raspberry Pi",
+    L"Espressif",
+    L"TinyUSB",
     L"Teensyduino"
 };
 
@@ -24,8 +33,8 @@ const PCWSTR g_BlockedProduct[PRODUCT_SIZE] =
 {
     L"Arduino Leonardo",
     L"SparkFun Pro Micro",
-    L"Pico"
-    L"TinyUSB Device"
+    L"Pico",
+    L"TinyUSB Device",
     L"ESP32-S3"
 };
 
@@ -33,13 +42,14 @@ const PCWSTR g_BlockedSerialnumber[SERIALNUMBER_SIZE] =
 {
     L"",
     L"123456",
-    L"1234567"
-    L"12345678"
-    L"123456789"
-    L"1234567890"
-    L"fedcba9876543210"
-    L"0123456789abcdef"
+    L"1234567",
+    L"12345678",
+    L"123456789",
+    L"1234567890",
+    L"fedcba9876543210",
+    L"0123456789abcdef",
 };
+
 
 VOID RegisterHUBCallbacks()
 {
@@ -264,7 +274,7 @@ BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType)
     case FW_Manufacturer:
         for (int i = 0; i < MANUFACTURER_SIZE; i++)
         {
-            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) != NULL)
+            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) == 0)
             {
                 g_HIDResults.detectedFirmware = TRUE;
                 return TRUE;
@@ -274,7 +284,7 @@ BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType)
     case FW_Product:
         for (int i = 0; i < PRODUCT_SIZE; i++)
         {
-            if (_wcsicmp(buffer, g_BlockedProduct[i]) != NULL)
+            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) == 0)
             {
                 g_HIDResults.detectedFirmware = TRUE;
                 return TRUE;
@@ -284,7 +294,7 @@ BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType)
     case FW_Serialnumber:
         for (int i = 0; i < SERIALNUMBER_SIZE; i++)
         {
-            if (_wcsicmp(buffer, g_BlockedSerialnumber[i]) != NULL)
+            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) == 0)
             {
                 g_HIDResults.detectedFirmware = TRUE;
                 return TRUE;
