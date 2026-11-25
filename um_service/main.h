@@ -7,15 +7,26 @@
 
 HANDLE g_service = nullptr;
 
-typedef enum _SAFETY_CODE
+typedef enum
 {
-    None,
-    DebuggerDetected,
-    VirtualEnvironment,
-    InjectionAttempt,
-    ManuallyMappedCode,
-    HashChanged
-} SAFETY_CODE;
+    VERIFY_SNAPSHOT_HASH = 1U << 0,
+    WALK_PROCESS_LIST = 1U << 1,
+    SCAN_FOR_MANUALLY_MAPPED_CODE = 1U << 2,
+    GET_CURRENT_STATUS = 1U << 3,
+    CHECK_HWBP = 1U << 4,
+    ENUMERATE_USB_HUB = 1U << 5
+} RuntimeValidators;
+
+typedef struct _Report
+{
+    BOOLEAN SuccessfulReport;
+    BOOLEAN InvalidHash;
+    BOOLEAN FlaggedProcess;
+    BOOLEAN ManuallyMappedCode;
+    BOOLEAN HwbpDetected;
+    BOOLEAN FlaggedUsbDevice;
+    BOOLEAN FlaggedNewUsbAttachment;
+} Report, * PReport;
 
 HANDLE CreateNewProcess(std::string path)
 {
@@ -156,7 +167,7 @@ bool InitializeFilterDriver()
         L"{4D36E96F-E325-11CE-BFC1-08002BE10318}";
 
     const wchar_t* serviceName = L"KernelAC";
-
+    
     if (RegOpenKeyExW(
         HKEY_LOCAL_MACHINE,
         subKey,

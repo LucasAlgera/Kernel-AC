@@ -29,10 +29,8 @@ NTSTATUS HandleProcessLaunch(IRP* Irp)
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+NTSTATUS WalkProcessList(PReport rp)
 {
-	UNREFERENCED_PARAMETER(DeviceObject);
-	UNREFERENCED_PARAMETER(Irp);
 	PEPROCESS startProcess = PsGetCurrentProcess();
 
 	// Bit risky to try this on other windows versions because Microsoft keeps changing their offsets...
@@ -75,22 +73,14 @@ NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 			break; // something probably went wrong, dont want to spend more time in this loop
 	}
 
-	if (flagged)
-		DbgPrint("[AC] Flagged a process!");
+	rp->FlaggedProcess = flagged;
 
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+NTSTATUS ScanManuallyMappedCode(PReport rp)
 {
-	PIO_STACK_LOCATION irpSp;
-	ULONG IOCTL_CODE = 0;
 	PEPROCESS process;
-
-	UNREFERENCED_PARAMETER(DeviceObject);
-
-	irpSp = IoGetCurrentIrpStackLocation(Irp);
-	IOCTL_CODE = irpSp->Parameters.DeviceIoControl.IoControlCode;
 
 	if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process)))
 		return STATUS_UNSUCCESSFUL;
@@ -115,7 +105,9 @@ NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 				mbi.Protect & PAGE_EXECUTE_WRITECOPY) &&
 			mbi.Type == MEM_PRIVATE)
 		{
+			rp->ManuallyMappedCode = TRUE;
 			DbgPrint("[AC] Found manually mapped code!");
+
 			return STATUS_UNSUCCESSFUL;
 		}
 		baseAddress = (PVOID)((ULONG_PTR)mbi.BaseAddress + mbi.RegionSize);
@@ -147,7 +139,7 @@ Try to get the address of the function by dynamically resolving it. If it's not 
 	return addr;
 }
 
-VOID ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId) 
+BOOLEAN ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId) 
 {
 
 	UNREFERENCED_PARAMETER(ThreadId);
@@ -167,47 +159,56 @@ VOID ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId)
 
 		// TODO: Update status/reporting struct here
 		// TODO: Maybe disable the HWBPs?
-		return;
+		return TRUE;
 	}
 	DbgPrint("[AC] No HWBP detected");
+	return FALSE;
 }
 
-VOID InspectThreadContext(HANDLE ThreadId) 
+BOOLEAN InspectThreadContext(HANDLE ThreadId) 
 {
 	PETHREAD pEthread = NULL;
 	NTSTATUS status;
 
 	PFN_PsGetContextThread PsGetThreadContext = GetPsGetThreadContext();
-	if (PsGetThreadContext == NULL) return; // PsGetThreadContext is probably not available for use
+	if (PsGetThreadContext == NULL) return FALSE; // PsGetThreadContext is probably not available for use
 
 	status = PsLookupThreadByThreadId(ThreadId, &pEthread);
-	if (!NT_SUCCESS(status)) return;
+	if (!NT_SUCCESS(status)) return FALSE;
 
 	PCONTEXT pContext = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(CONTEXT), 'Txtc');
 	if (!pContext) 
 	{
 		ObDereferenceObject(pEthread);
-		return;
+		return FALSE;
 	}
 
+	PEPROCESS p_eprocess;
+	status = PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &p_eprocess);
+	PsSuspendProcess(p_eprocess);
+
 	pContext->ContextFlags = CONTEXT_DEBUG_REGISTERS; // saves some computing
-	
 	status = PsGetThreadContext(pEthread, pContext, KernelMode);
+
+	PsResumeProcess(p_eprocess);
+
+	BOOLEAN hwbp = FALSE;
+
 	if (NT_SUCCESS(status)) 
 	{
-		ParseDebugRegisters(pContext, ThreadId);
+		hwbp = ParseDebugRegisters(pContext, ThreadId);
 	}
 	DbgPrint("[AC] Status: 0x%08X\n", status);
 
 	ExFreePoolWithTag(pContext, 'Txtc');
 	ObDereferenceObject(pEthread); 
+	ObDereferenceObject(p_eprocess);
+
+	return hwbp;
 }
 
-NTSTATUS ScanThreadsForHWBP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+NTSTATUS ScanThreadsForHWBP(PReport rp)
 {
-	UNREFERENCED_PARAMETER(DeviceObject);
-	UNREFERENCED_PARAMETER(Irp);
-
 	PVOID buff = NULL;
 	ULONG size;
 	NTSTATUS status;
@@ -240,7 +241,8 @@ NTSTATUS ScanThreadsForHWBP(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 				SYSTEM_THREAD_INFORMATION thread = pCurrent->Threads[i];
 				HANDLE tid = thread.ClientId.UniqueThread;
 
-				InspectThreadContext(tid);
+				if (InspectThreadContext(tid))
+					rp->HwbpDetected = TRUE;
 			}
 			break;
 		}

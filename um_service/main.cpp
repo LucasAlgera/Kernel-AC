@@ -9,12 +9,9 @@
 #define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20002, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_SNAPSHOT_HASH_TEXT_SECTION		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20003, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_VERIFY_SNAPSHOT_HASH				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_WALK_PROCESS_LIST 				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_GET_CURRENT_STATUS				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20007, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_CHECK_HWBP						CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20008, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20009, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_RUNTIME_VALIDATION				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 
 #define FEATURE_MOUSE_MONITORING
@@ -31,6 +28,11 @@ int main()
         std::cout << "Could not register Filter";
         return 0;
     }
+
+    // restarts the device chain so the filterdriver is enabled
+    system("devcon.exe restart =Mouse");
+
+    // TODO: INSTALL DEVCON.EXE and run it from there
 
     HANDLE hDriver = CreateFileW(
         L"\\\\.\\KernelAC",          
@@ -72,32 +74,29 @@ int main()
         DeviceIoControl(hDriver, IOCTL_SNAPSHOT_HASH_TEXT_SECTION, NULL, NULL, NULL, NULL, NULL, NULL);
     }
 
-    bool tamperDetected = false;
-    bool blacklistProcPresent = false;;
-
-    if(hDriver)DeviceIoControl(hDriver, IOCTL_WALK_PROCESS_LIST, NULL, NULL, NULL, NULL, NULL, NULL);
-    if(hDriver)DeviceIoControl(hDriver, IOCTL_CHECK_HWBP, NULL, NULL, NULL, NULL, NULL, NULL);
-    if(hDriver)DeviceIoControl(hDriver, IOCTL_VERIFY_SNAPSHOT_HASH, NULL, NULL, &tamperDetected, sizeof(bool), NULL, NULL);
-
-    if (tamperDetected)
-    {
-        std::cout << "tamper!!";
-    }
-
-    //std::srand(std::time(0));
 
     using namespace std::chrono_literals;
 
-    if (hDriver)
     {
-        bool tamperDetected = false;
+        RuntimeValidators mask = static_cast<RuntimeValidators>(
+            VERIFY_SNAPSHOT_HASH | WALK_PROCESS_LIST | SCAN_FOR_MANUALLY_MAPPED_CODE | 
+            GET_CURRENT_STATUS | CHECK_HWBP | ENUMERATE_USB_HUB );
 
-        DeviceIoControl(hDriver, IOCTL_VERIFY_SNAPSHOT_HASH, NULL, 0, &tamperDetected, sizeof(tamperDetected), NULL, NULL);
-        if (hDriver)DeviceIoControl(hDriver, IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE, NULL, NULL, NULL, NULL, NULL, NULL);
+        Report report = { 0 };
+        DWORD bytesReturned = 0;
 
-        if (tamperDetected)
+        if (hDriver)DeviceIoControl(hDriver, IOCTL_RUNTIME_VALIDATION, &mask, 
+            sizeof(mask), &report, sizeof(report), &bytesReturned, NULL);
+
+        if (bytesReturned == sizeof(report) && report.SuccessfulReport)
         {
-            std::cout << "tamper!!\n";
+            std::cout << "Success: " << (bool)report.SuccessfulReport << std::endl;
+            std::cout << "Value 1: " << (bool)report.FlaggedNewUsbAttachment << std::endl;
+            std::cout << "Value 2: " << (bool)report.FlaggedProcess << std::endl;
+            std::cout << "Value 3: " << (bool)report.FlaggedUsbDevice << std::endl;
+            std::cout << "Value 4: " << (bool)report.HwbpDetected << std::endl;
+            std::cout << "Value 5: " << (bool)report.InvalidHash << std::endl;
+            std::cout << "Value 6: " << (bool)report.ManuallyMappedCode << std::endl;
         }
     }
 
@@ -106,7 +105,6 @@ int main()
     if (!CreateServer())
         return 0;
 
-    std::string input;
     while (true) 
     {
         if (IsMouseClicked())
@@ -116,16 +114,7 @@ int main()
     }
 #endif // FEATURE_MOUSE_MONITORING
 
-
-    std::string x;
-    std::cin >> x;
-
     if(hDriver) CloseHandle(hDriver);
-
-    std::string y;
-    std::cin >> y;
-
-
     UnloadDriver();
 
     return 1;

@@ -74,7 +74,11 @@ NTSTATUS UsbCallback(
 
     if (IsEqualGUID(&Notification->Event, &GUID_DEVICE_INTERFACE_ARRIVAL))
     {
-        status = EnumerateUsbHub();
+        Report rp;
+        status = EnumerateUsbHub(&rp);
+        if (rp.FlaggedUsbDevice)
+            g_HIDResults.detectedNewUsbAttachment = TRUE;
+
         DbgPrint("[AC] New Device attached!\n");
     }
 
@@ -133,7 +137,7 @@ NTSTATUS ScanComPorts()
     return STATUS_SUCCESS;
 }
 
-NTSTATUS EnumerateUsbHub()
+NTSTATUS EnumerateUsbHub(PReport rp)
 /*
 - Goes through all USB hubs and enumerates through every open usb connection. 
 - Retrieves some firmware values and compares them against a blacklist.
@@ -144,6 +148,11 @@ NTSTATUS EnumerateUsbHub()
     PZZWSTR symbolicLinkList = NULL;
     NTSTATUS status = STATUS_UNSUCCESSFUL;
  
+    if (rp->FlaggedNewUsbAttachment == FALSE && g_HIDResults.detectedNewUsbAttachment == TRUE)
+    {
+        rp->FlaggedNewUsbAttachment = g_HIDResults.detectedNewUsbAttachment;
+    }
+
     status = IoGetDeviceInterfaces(&GUID_DEVINTERFACE_USB_HUB, NULL, 0, &symbolicLinkList);
  
     if (!NT_SUCCESS(status) || symbolicLinkList == NULL) return status;
@@ -205,8 +214,9 @@ NTSTATUS EnumerateUsbHub()
                 AnalyzeFirmwareString(serialnumber, FW_Serialnumber);
             }
             
-            if (g_HIDResults.detectedFirmware)
+            if (g_HIDResults.detectedFirmware && rp != NULL)
             {
+                rp->FlaggedUsbDevice = TRUE;
                 DbgPrint("[AC] Suspicous firmware entry \n");
             }
         }

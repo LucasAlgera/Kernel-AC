@@ -12,4 +12,4 @@ NTSTATUS GetTextSectionFromMonitoredProcess(PUCHAR* text, ULONG* length, uintptr
 
 NTSTATUS TakeHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp);
 
-NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp);
+NTSTATUS VerifyHashSnapshot(PReport rp);

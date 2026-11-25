@@ -232,7 +232,7 @@ Hashes the code (.text) section and stores it in g_DriverExtention.
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS VerifyHashSnapshot(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+NTSTATUS VerifyHashSnapshot(PReport rp)
 /*
 Hashes the code (.text) section and compares it to the stored hash in g_DriverExtention.
 */
@@ -244,9 +244,6 @@ Hashes the code (.text) section and compares it to the stored hash in g_DriverEx
     uintptr_t offset = 0x0;
     BOOLEAN tampered = FALSE;
     NTSTATUS status = STATUS_SUCCESS;
-
-    UNREFERENCED_PARAMETER(DeviceObject);
-    UNREFERENCED_PARAMETER(Irp);
 
     if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)g_DriverExtention->PID, &process)))
         goto noprocess;
@@ -286,17 +283,7 @@ Hashes the code (.text) section and compares it to the stored hash in g_DriverEx
     if (!NT_SUCCESS(status)) goto fail; 
 
 
-    // Finish I/O request
-    PIO_STACK_LOCATION ioStack = IoGetCurrentIrpStackLocation(Irp);
-    ULONG buffOutLength = ioStack->Parameters.DeviceIoControl.OutputBufferLength;
-    PVOID buffOut = Irp->AssociatedIrp.SystemBuffer; 
-
-    if (buffOutLength < sizeof(tampered)) goto fail;
-
-    RtlCopyMemory(buffOut, &tampered, sizeof(tampered));
-    Irp->IoStatus.Status = STATUS_SUCCESS;
-    Irp->IoStatus.Information = sizeof(tampered);
-    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    rp->InvalidHash = tampered;
     ObDereferenceObject(process);
 
     KeUnstackDetachProcess(&ApcState); // go back to own address space
@@ -307,9 +294,6 @@ fail: // something went wrong
     ObDereferenceObject(process);
     KeUnstackDetachProcess(&ApcState); // go back to own address space
 noprocess:
-    Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
-    Irp->IoStatus.Information = 0;
-    IoCompleteRequest(Irp, IO_NO_INCREMENT);
 
     return STATUS_UNSUCCESSFUL;
 }

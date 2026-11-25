@@ -19,13 +19,9 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 #define IOCTL_SNAPSHOT_HASH_TEXT_SECTION		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20003, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 // These should be mashed in 1 IOCTL?
-#define IOCTL_VERIFY_SNAPSHOT_HASH				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_WALK_PROCESS_LIST 				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20006, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_GET_CURRENT_STATUS				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20007, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_CHECK_HWBP						CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20008, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20009, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_ENUMERATE_USB_HUB					CTL_CODE(FILE_DEVICE_UNKNOWN, 0x200010, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_RUNTIME_VALIDATION				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 
 NTSTATUS DispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 /*
@@ -53,37 +49,24 @@ Used by:
 		case IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE:
 			DbgPrint("[AC] Process Terminated");
 			break;
+
 		case IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH:
 			status = HandleProcessLaunch(Irp);
 			DbgPrint("[AC] Process Launched");
 			break;
+
 		case IOCTL_SNAPSHOT_HASH_TEXT_SECTION:
 			status = TakeHashSnapshot(DeviceObject, Irp);
 			break;
-		case IOCTL_VERIFY_SNAPSHOT_HASH:
-			status = VerifyHashSnapshot(DeviceObject, Irp);
-			goto end;
-			break;
-		case IOCTL_WALK_PROCESS_LIST:
-			status = WalkProcessList(DeviceObject, Irp);
-			//goto end; TODO: implement IRP handling for process scanning.
-			break;
-		case IOCTL_SCAN_FOR_MANUALLY_MAPPED_CODE:
-			status = ScanManuallyMappedCode(DeviceObject, Irp);
-			break;
-		case IOCTL_GET_CURRENT_STATUS: 
-			status = ReportCurrentStatus(DeviceObject, Irp);
-			goto end;
-			break;
-		case IOCTL_CHECK_HWBP:
-			status = ScanThreadsForHWBP(DeviceObject, Irp);
-			break;
+
 		case IOCTL_GAME_REGISTERED_CLICK:
 			HandleGameMouseClick();
 			status = STATUS_SUCCESS;
 			break;
-		case IOCTL_ENUMERATE_USB_HUB:
-			status = EnumerateUsbHub();
+
+		case IOCTL_RUNTIME_VALIDATION:
+			status = RuntimeValidations(DeviceObject, Irp);
+			goto end;
 			break;
 		}
 
@@ -91,15 +74,13 @@ Used by:
 		Irp->IoStatus.Information = 0;
 		IoCompleteRequest(Irp, IO_NO_INCREMENT);
 
+end:
 		return status;
 	}
 	else
 	{
 		return PassIRP(DeviceObject, Irp);
 	}
-
-end:
-	return STATUS_UNSUCCESSFUL;
 }
 
 NTSTATUS InternalDispatchDeviceControl(DEVICE_OBJECT* DeviceObject, IRP* Irp)
@@ -172,28 +153,69 @@ Used by:
 	}
 }
 
-NTSTATUS ReportCurrentStatus(DEVICE_OBJECT* DeviceObject, IRP* Irp)
+NTSTATUS RuntimeValidations(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 {
 	UNREFERENCED_PARAMETER(DeviceObject);
 
-	SAFETY_STATUS status = *g_DriverExtention->SafetyStatus;
-	PIO_STACK_LOCATION ioStack = IoGetCurrentIrpStackLocation(Irp);
-	ULONG buffOutLength = ioStack->Parameters.DeviceIoControl.OutputBufferLength;
-	PVOID buffOut = Irp->AssociatedIrp.SystemBuffer;
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 
-	if (buffOutLength < sizeof(status))
+	ULONG inBufferLength = irpSp->Parameters.DeviceIoControl.InputBufferLength;
+	PVOID lpBufferIn = Irp->AssociatedIrp.SystemBuffer;
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+	Report report = { 0 };
+
+	if (inBufferLength != sizeof(RuntimeValidators))
 	{
-		Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
-		Irp->IoStatus.Information = 0;
-		IoCompleteRequest(Irp, IO_NO_INCREMENT);
-
 		return STATUS_UNSUCCESSFUL;
 	}
 
-	RtlCopyMemory(buffOut, &status, sizeof(status));
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = sizeof(status);
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	RuntimeValidators validationMask = *(RuntimeValidators*)lpBufferIn;
 
-	return STATUS_SUCCESS;
+	if (validationMask & VERIFY_SNAPSHOT_HASH)
+	{
+		status = VerifyHashSnapshot(&report);
+	}
+	if (validationMask & WALK_PROCESS_LIST)
+	{
+		status = WalkProcessList(&report);
+	}
+	if (validationMask & SCAN_FOR_MANUALLY_MAPPED_CODE)
+	{
+		status = ScanManuallyMappedCode(&report);
+	}
+	if (validationMask & CHECK_HWBP)
+	{
+		status = ScanThreadsForHWBP(&report);
+	}
+	if (validationMask & ENUMERATE_USB_HUB)
+	{
+		status = EnumerateUsbHub(&report);
+	}
+	if (validationMask & GET_CURRENT_STATUS) // Always last
+	{
+		ULONG buffOutLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
+		PVOID buffOut = Irp->AssociatedIrp.SystemBuffer;
+
+		if (buffOutLength < sizeof(report)) goto end;
+
+		report.SuccessfulReport = TRUE;
+
+		RtlCopyMemory(buffOut, &report, sizeof(report));
+		status = STATUS_SUCCESS;
+		Irp->IoStatus.Status = status;
+		Irp->IoStatus.Information = sizeof(report);
+		IoCompleteRequest(Irp, IO_NO_INCREMENT);
+		DbgPrint("SUCCESS! \n");
+
+		return status;
+	}
+	
+end:
+	Irp->IoStatus.Status = status;
+	Irp->IoStatus.Information = 0;
+	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	DbgPrint("FAIL! \n");
+
+	return status;
 }

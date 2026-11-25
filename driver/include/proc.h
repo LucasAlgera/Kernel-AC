@@ -4,15 +4,15 @@
 
 NTSTATUS HandleProcessLaunch(IRP* Irp);
 
-NTSTATUS WalkProcessList(DEVICE_OBJECT* DeviceObject, IRP* Irp);
+NTSTATUS WalkProcessList(PReport rp);
 
-NTSTATUS ScanManuallyMappedCode(DEVICE_OBJECT* DeviceObject, IRP* Irp);
+NTSTATUS ScanManuallyMappedCode(PReport rp);
 
-NTSTATUS ScanThreadsForHWBP(DEVICE_OBJECT* DeviceObject, IRP* Irp);
+NTSTATUS ScanThreadsForHWBP(PReport rp);
 
-VOID InspectThreadContext(HANDLE ThreadId);
+BOOLEAN InspectThreadContext(HANDLE ThreadId);
 
-VOID ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId);
+BOOLEAN ParseDebugRegisters(PCONTEXT Context, HANDLE ThreadId);
 
 // Import undocumented function(s)
 
@@ -28,6 +28,10 @@ typedef NTSTATUS(NTAPI* PFN_PsGetContextThread)(
     IN OUT PCONTEXT ThreadContext,
     IN KPROCESSOR_MODE PreviousMode
     );
+
+EXTERN_C NTSYSAPI NTSTATUS PsResumeProcess(PEPROCESS Process);
+
+EXTERN_C NTSYSAPI NTSTATUS PsSuspendProcess(PEPROCESS Process);
 
 PFN_PsGetContextThread GetPsGetThreadContext();
 

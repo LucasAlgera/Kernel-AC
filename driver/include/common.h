@@ -28,12 +28,16 @@ typedef enum _SAFETY_CODE
 	SuspicousMovement
 } SAFETY_CODE;
 
-typedef struct _SAFETY_STATUS
+typedef struct _Report
 {
-	SAFETY_CODE SafetyCode;
-	ULONG Severity; // ?
-
-} SAFETY_STATUS, * PSAFETY_STATUS;
+	BOOLEAN SuccessfulReport;
+	BOOLEAN InvalidHash;
+	BOOLEAN FlaggedProcess;
+	BOOLEAN ManuallyMappedCode;
+	BOOLEAN HwbpDetected;
+	BOOLEAN FlaggedUsbDevice;
+	BOOLEAN FlaggedNewUsbAttachment;
+} Report, * PReport;
 
 #ifndef _DRIVER_SETTINGS_DEFINED
 #define _DRIVER_SETTINGS_DEFINED
@@ -47,7 +51,7 @@ typedef struct _DRIVER_SETTINGS
 		ULONG ButtonFlags;
 		LARGE_INTEGER Time;
 	} MouseData;
-	PSAFETY_STATUS SafetyStatus;
+	Report SafetyStatus;
 } DRIVER_SETTINGS, * PDRIVER_SETTINGS;
 #endif
 extern PDRIVER_SETTINGS g_DriverExtention;

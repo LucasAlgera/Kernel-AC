@@ -30,6 +30,7 @@ typedef struct _HIDResults
 {
     BOOLEAN detectedFirmware;
     BOOLEAN detectedComPort;
+    BOOLEAN detectedNewUsbAttachment;
 } HIDResults, * PHIDResults;
 
 
@@ -46,7 +47,7 @@ PVOID g_NotificationEntry;
 // USB hub enumeration
 NTSTATUS ScanComPorts();
 
-NTSTATUS EnumerateUsbHub();
+NTSTATUS EnumerateUsbHub(PReport rp);
 
 NTSTATUS GetStringDescriptorFromHub(
     _In_ PDEVICE_OBJECT hubPdo,
