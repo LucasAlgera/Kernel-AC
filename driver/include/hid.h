@@ -45,7 +45,7 @@ PVOID g_NotificationEntry;
 
 
 // USB hub enumeration
-NTSTATUS ScanComPorts();
+NTSTATUS ScanComPorts(PReport rp);
 
 NTSTATUS EnumerateUsbHub(PReport rp);
 

@@ -17,8 +17,6 @@ This file mostly contains I/O handling, though some smaller Anti Cheat tasks als
 #define IOCTL_NOTIFY_DRIVER_PROCESS_TERMINATE	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20001, METHOD_BUFFERED, FILE_ANY_ACCESS) // should not be any access!
 #define IOCTL_NOTIFY_DRIVER_PROCESS_LAUNCH		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20002, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_SNAPSHOT_HASH_TEXT_SECTION		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20003, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
-// These should be mashed in 1 IOCTL?
 #define IOCTL_GAME_REGISTERED_CLICK				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20004, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_RUNTIME_VALIDATION				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x20005, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
@@ -192,6 +190,10 @@ NTSTATUS RuntimeValidations(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 	{
 		status = EnumerateUsbHub(&report);
 	}
+	if (validationMask & SCAN_USED_COM_PORTS)
+	{
+		status = ScanComPorts(&report);
+	}
 	if (validationMask & GET_CURRENT_STATUS) // Always last
 	{
 		ULONG buffOutLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
@@ -200,13 +202,12 @@ NTSTATUS RuntimeValidations(DEVICE_OBJECT* DeviceObject, IRP* Irp)
 		if (buffOutLength < sizeof(report)) goto end;
 
 		report.SuccessfulReport = TRUE;
-
 		RtlCopyMemory(buffOut, &report, sizeof(report));
 		status = STATUS_SUCCESS;
+
 		Irp->IoStatus.Status = status;
 		Irp->IoStatus.Information = sizeof(report);
 		IoCompleteRequest(Irp, IO_NO_INCREMENT);
-		DbgPrint("SUCCESS! \n");
 
 		return status;
 	}
@@ -215,7 +216,6 @@ end:
 	Irp->IoStatus.Status = status;
 	Irp->IoStatus.Information = 0;
 	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	DbgPrint("FAIL! \n");
 
 	return status;
 }

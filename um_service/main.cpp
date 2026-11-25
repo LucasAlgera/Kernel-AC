@@ -80,7 +80,7 @@ int main()
     {
         RuntimeValidators mask = static_cast<RuntimeValidators>(
             VERIFY_SNAPSHOT_HASH | WALK_PROCESS_LIST | SCAN_FOR_MANUALLY_MAPPED_CODE | 
-            GET_CURRENT_STATUS | CHECK_HWBP | ENUMERATE_USB_HUB );
+            GET_CURRENT_STATUS | CHECK_HWBP | ENUMERATE_USB_HUB | SCAN_USED_COM_PORTS);
 
         Report report = { 0 };
         DWORD bytesReturned = 0;

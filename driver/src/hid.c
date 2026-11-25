@@ -96,7 +96,7 @@ NTSTATUS UnRegisterHUBCallbacks()
     return status;
 }
 
-NTSTATUS ScanComPorts()
+NTSTATUS ScanComPorts(PReport rp)
 {
     PAGED_CODE();
 
@@ -125,6 +125,7 @@ NTSTATUS ScanComPorts()
         if (status == STATUS_ACCESS_DENIED || status == STATUS_SHARING_VIOLATION)
         {
             g_HIDResults.detectedComPort = TRUE;
+            rp->FlaggedOpenComPort;
         }
         if (hPort)
         {

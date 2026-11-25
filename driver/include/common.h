@@ -36,6 +36,7 @@ typedef struct _Report
 	BOOLEAN ManuallyMappedCode;
 	BOOLEAN HwbpDetected;
 	BOOLEAN FlaggedUsbDevice;
+	BOOLEAN FlaggedOpenComPort;
 	BOOLEAN FlaggedNewUsbAttachment;
 } Report, * PReport;
 
