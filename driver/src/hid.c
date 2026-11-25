@@ -5,8 +5,8 @@ Normally the now hardcoded blocklists would either be encrypted in memory or han
 */
 
 #include "hid.h"
+#include <wdmguid.h>
 
-#define GUID_COUNT 4
 #define MANUFACTURER_SIZE 6
 #define PRODUCT_SIZE 5
 #define SERIALNUMBER_SIZE 8
@@ -16,6 +16,7 @@ DEFINE_GUID(GUID_DEVINTERFACE_COMPORT, 0X86E0D1E0L, 0X8089, 0X11D0, 0X9C, 0XE4, 
 
 HIDResults g_HIDResults = { 0 };
 
+PVOID g_NotificationEntry = NULL;
 
 // These blocklists are known to be used in cheats, these results should not be weighed extremely harsly. 
 // But they could indicate something..
@@ -51,10 +52,44 @@ const PCWSTR g_BlockedSerialnumber[SERIALNUMBER_SIZE] =
 };
 
 
-VOID RegisterHUBCallbacks()
+NTSTATUS RegisterHUBCallbacks(PDRIVER_OBJECT Driver)
 {
-    // IoRegisterPlugPlayNotification?
-    return;
+    NTSTATUS status = IoRegisterPlugPlayNotification(EventCategoryDeviceInterfaceChange, 
+        PNPNOTIFY_DEVICE_INTERFACE_INCLUDE_EXISTING_INTERFACES,
+        (PVOID)&GUID_DEVINTERFACE_USB_DEVICE, Driver,
+        &UsbCallback, NULL, &g_NotificationEntry);
+
+    return status;
+}
+
+NTSTATUS UsbCallback(
+    _In_ PVOID NotificationStructure,
+    _Inout_opt_ PVOID Context
+) 
+{
+    PDEVICE_INTERFACE_CHANGE_NOTIFICATION Notification = (PDEVICE_INTERFACE_CHANGE_NOTIFICATION)NotificationStructure;
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+
+    UNREFERENCED_PARAMETER(Context);
+
+    if (IsEqualGUID(&Notification->Event, &GUID_DEVICE_INTERFACE_ARRIVAL))
+    {
+        status = EnumerateUsbHub();
+        DbgPrint("[AC] New Device attached!\n");
+    }
+
+    return status;
+}
+
+NTSTATUS UnRegisterHUBCallbacks()
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    if (g_NotificationEntry != NULL)
+    {
+        status = IoUnregisterPlugPlayNotificationEx(g_NotificationEntry);
+        g_NotificationEntry = NULL;
+    }
+    return status;
 }
 
 NTSTATUS ScanComPorts()
@@ -284,7 +319,7 @@ BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType)
     case FW_Product:
         for (int i = 0; i < PRODUCT_SIZE; i++)
         {
-            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) == 0)
+            if (_wcsicmp(buffer, g_BlockedProduct[i]) == 0)
             {
                 g_HIDResults.detectedFirmware = TRUE;
                 return TRUE;
@@ -294,7 +329,7 @@ BOOLEAN AnalyzeFirmwareString(_In_ PWCHAR buffer, _In_ FirmwareTypes fwType)
     case FW_Serialnumber:
         for (int i = 0; i < SERIALNUMBER_SIZE; i++)
         {
-            if (_wcsicmp(buffer, g_BlockedManufacturer[i]) == 0)
+            if (_wcsicmp(buffer, g_BlockedSerialnumber[i]) == 0)
             {
                 g_HIDResults.detectedFirmware = TRUE;
                 return TRUE;

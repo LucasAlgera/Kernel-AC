@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "common.h"
 #include "moufltr.h"
+#include "hid.h"
 
 #define ENABLE_KD_PROTECTION
 
@@ -158,7 +159,16 @@ This function is called as the entry point of the driver, important things happe
         IoDeleteSymbolicLink(&g_DeviceSymbolicLink);
         return status;
     }
-    DbgPrint("[AC] RegisterCallbacks succeeded");
+
+    status = RegisterHUBCallbacks(pDriverObject);
+    if (!NT_SUCCESS(status)) {
+        DbgPrint("[AC] RegisterCallbacks failed, status %x", status);
+
+        IoDeleteDevice(pDriverObject->DeviceObject);
+        UnRegisterCallbacks();
+        IoDeleteSymbolicLink(&g_DeviceSymbolicLink);
+        return status;
+    }
 
     DbgPrint("[AC] Driver Entry Succeeded.");
     return STATUS_SUCCESS;

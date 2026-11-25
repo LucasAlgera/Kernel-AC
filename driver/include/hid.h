@@ -32,7 +32,19 @@ typedef struct _HIDResults
     BOOLEAN detectedComPort;
 } HIDResults, * PHIDResults;
 
-VOID RegisterHUBCallbacks();
+
+// I/O Callback registration
+NTSTATUS RegisterHUBCallbacks(PDRIVER_OBJECT Driver);
+
+DRIVER_NOTIFICATION_CALLBACK_ROUTINE UsbCallback;
+
+NTSTATUS UnRegisterHUBCallbacks();
+
+PVOID g_NotificationEntry;
+
+
+// USB hub enumeration
+NTSTATUS ScanComPorts();
 
 NTSTATUS EnumerateUsbHub();
 
