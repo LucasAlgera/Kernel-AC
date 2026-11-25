@@ -106,6 +106,7 @@ NTSTATUS ScanManuallyMappedCode(PReport rp)
 			mbi.Type == MEM_PRIVATE)
 		{
 			rp->ManuallyMappedCode = TRUE;
+			KeUnstackDetachProcess(&apcState);
 			DbgPrint("[AC] Found manually mapped code!");
 
 			return STATUS_UNSUCCESSFUL;
